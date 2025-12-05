@@ -26,6 +26,10 @@ export default function usePDF() {
     pdf.addImage(imgData, "PNG", 0, 0, width, height);
     pdf.save(fileName);
 
+    document.querySelectorAll('.hide').forEach((el) => {
+      el.classList.remove("hidden");
+    });
+
   };
 
   return { ref, generatePDF };
