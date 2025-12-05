@@ -26,6 +26,7 @@ export default function LabTechnicianDashboard() {
   const normalizedPosition = userPosition?.toLowerCase();
   const isRadiologist = normalizedPosition === 'radiologist';
   const isMedTech = normalizedPosition === 'medtech';
+  const isAdmin = normalizedPosition = 'admin';
 
   // Fetch tests based on user position
   useEffect(() => {
@@ -113,7 +114,7 @@ export default function LabTechnicianDashboard() {
     );
   }
 
-  if (!normalizedPosition || (normalizedPosition !== 'radiologist' && normalizedPosition !== 'medtech')) {
+  if (!normalizedPosition || (normalizedPosition !== 'radiologist' && normalizedPosition !== 'medtech' && normalizedPosition !== 'admin')) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md mx-auto p-8 bg-white border border-gray-200 rounded-lg shadow-sm">

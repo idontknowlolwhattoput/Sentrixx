@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { useRef, useState } from "react";
+import QrReader from "./QrReader";
 
 export default function QRScanner() {
   const [scanStatus, setScanStatus] = useState("ready");
@@ -14,8 +14,6 @@ export default function QRScanner() {
   const lastScannedRef = useRef("");
   const manualDebounceRef = useRef(null);
   const scanCooldownRef = useRef(null);
-  const timerRef = useRef(null);
-  const html5QrCodeRef = useRef(null);
 
   const sanitizeCode = (raw) => {
     return raw
@@ -28,11 +26,11 @@ export default function QRScanner() {
   const startCooldown = () => {
     setScanCooldown(true);
     setScanTimer(3); // 3 second cooldown
-    
+
     if (scanCooldownRef.current) {
       clearInterval(scanCooldownRef.current);
     }
-    
+
     scanCooldownRef.current = setInterval(() => {
       setScanTimer((prev) => {
         if (prev <= 1) {
@@ -50,7 +48,7 @@ export default function QRScanner() {
   // -------------------------------
   const fetchAppointmentData = async (appointmentCode) => {
     if (scanCooldown) return;
-    
+
     setLoading(true);
     setError("");
     setAppointmentStatus("");
@@ -60,13 +58,13 @@ export default function QRScanner() {
       const response = await fetch(
         `http://localhost:5000/receptionist/appointment`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            appointmentCode: appointmentCode
-          })
+            appointmentCode: appointmentCode,
+          }),
         }
       );
 
@@ -79,7 +77,7 @@ export default function QRScanner() {
           // Handle different types of timing errors
           const reason = data.details?.reason;
           let errorMessage = data.message;
-          
+
           switch (reason) {
             case "future_appointment":
               setAppointmentStatus("future");
@@ -96,7 +94,7 @@ export default function QRScanner() {
             default:
               setAppointmentStatus("error");
           }
-          
+
           throw new Error(errorMessage);
         } else {
           throw new Error(data.message || "Failed to fetch appointment data");
@@ -106,25 +104,16 @@ export default function QRScanner() {
       // Success case
       setAppointmentData(data.appointment);
       setAppointmentStatus("success");
-      
+
       // Start cooldown after successful scan
       startCooldown();
-      
     } catch (error) {
       console.error("Error fetching appointment:", error);
       setError(error.message);
       setAppointmentData(null);
-      
+
       // Start cooldown even on error to prevent spam
       startCooldown();
-      
-      // Only show alert for non-timing errors
-      if (!appointmentStatus.includes("expired") && 
-          !appointmentStatus.includes("future") && 
-          !appointmentStatus.includes("too_early") &&
-          !appointmentStatus.includes("too_late")) {
-        alert(error.message);
-      }
     } finally {
       setLoading(false);
     }
@@ -149,84 +138,31 @@ export default function QRScanner() {
     }, 500);
   };
 
-  // -------------------------------
-  // QR Scanner Initialization
-  // -------------------------------
-  useEffect(() => {
-    const qrboxSize = 250; // Square QR box size
-    const html5QrCode = new Html5Qrcode("qr-reader");
-    html5QrCodeRef.current = html5QrCode;
-
-    // Calculate centered QR box
-    const config = {
-      fps: 10,
-      qrbox: {
-        width: qrboxSize,
-        height: qrboxSize
-      },
-      aspectRatio: 1.0,
-    };
-
-    html5QrCode
-      .start(
-        { facingMode: "environment" },
-        config,
-        async (decodedText) => {
-          const clean = sanitizeCode(decodedText);
-
-          console.log("SCAN:", decodedText, "→ CLEAN:", clean, "LEN:", clean.length);
-
-          // Prevent duplicate scans and respect cooldown
-          if (lastScannedRef.current === clean || scanCooldown) return;
-          lastScannedRef.current = clean;
-
-          setScanStatus("success");
-          await fetchAppointmentData(clean);
-
-          setTimeout(() => setScanStatus("ready"), 2000);
-        },
-        (err) => {
-          // Ignore common scanning errors
-          if (!err.toString().includes("NotFoundException")) {
-            console.warn("QR scan error:", err);
-          }
-        }
-      )
-      .catch((err) => {
-        console.error("Camera start error:", err);
-        setScanStatus("error");
-      });
-
-    return () => {
-      if (html5QrCodeRef.current) {
-        html5QrCodeRef.current.stop().catch(() => {});
-      }
-      if (scanCooldownRef.current) {
-        clearInterval(scanCooldownRef.current);
-      }
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, []);
-
   const getStatusColor = () => {
     switch (scanStatus) {
-      case "success": return "bg-green-100 border-green-400 text-green-700";
-      case "error": return "bg-red-100 border-red-400 text-red-700";
-      case "ready": return "bg-blue-100 border-blue-400 text-blue-700";
-      default: return "bg-gray-100 border-gray-400 text-gray-700";
+      case "success":
+        return "bg-green-100 border-green-400 text-green-700";
+      case "error":
+        return "bg-red-100 border-red-400 text-red-700";
+      case "ready":
+        return "bg-blue-100 border-blue-400 text-blue-700";
+      default:
+        return "bg-gray-100 border-gray-400 text-gray-700";
     }
   };
 
   const getStatusMessage = () => {
     if (scanCooldown) return `Cooldown: ${scanTimer}s`;
-    
+
     switch (scanStatus) {
-      case "success": return "Appointment verified!";
-      case "error": return "Camera error";
-      case "ready": return "Ready to scan";
-      default: return "Initializing...";
+      case "success":
+        return "Appointment verified!";
+      case "error":
+        return "Camera error";
+      case "ready":
+        return "Ready to scan";
+      default:
+        return "Initializing...";
     }
   };
 
@@ -240,7 +176,7 @@ export default function QRScanner() {
           buttonColor: "bg-green-500",
           message: "Added to Queue",
           description: "Patient has been added to the waiting queue.",
-          icon: "✅"
+          icon: "✅",
         };
       case "expired":
         return {
@@ -249,9 +185,8 @@ export default function QRScanner() {
           buttonColor: "bg-red-500",
           message: "Appointment Expired",
           description: "The scheduled date and time has already passed.",
-          icon: "❌"
+          icon: "❌",
         };
-         location.reload()
       case "future":
         return {
           color: "bg-blue-100 border-blue-400 text-blue-700",
@@ -259,9 +194,8 @@ export default function QRScanner() {
           buttonColor: "bg-blue-500",
           message: "Future Appointment",
           description: "This appointment is scheduled for a future date.",
-          icon: "📅"
+          icon: "📅",
         };
-         location.reload()
       case "too_early":
         return {
           color: "bg-yellow-100 border-yellow-400 text-yellow-700",
@@ -269,9 +203,8 @@ export default function QRScanner() {
           buttonColor: "bg-yellow-500",
           message: "Too Early",
           description: "Please come within 30 minutes of your scheduled time.",
-          icon: "⏰"
+          icon: "⏰",
         };
-         location.reload()
       case "too_late":
         return {
           color: "bg-orange-100 border-orange-400 text-orange-700",
@@ -279,9 +212,8 @@ export default function QRScanner() {
           buttonColor: "bg-orange-500",
           message: "Too Late",
           description: "Appointment time has passed. Please contact reception.",
-          icon: "⚠️"
+          icon: "⚠️",
         };
-         location.reload()
       default:
         return {
           color: "bg-gray-100 border-gray-400 text-gray-700",
@@ -289,9 +221,8 @@ export default function QRScanner() {
           buttonColor: "bg-gray-500",
           message: "Not Verified",
           description: "Appointment not yet verified.",
-          icon: "⏳"
+          icon: "⏳",
         };
-         location.reload()
     }
   };
 
@@ -299,7 +230,9 @@ export default function QRScanner() {
   const getPatientFullName = () => {
     if (!appointmentData) return "";
     const { first_name, last_name, middle_name } = appointmentData;
-    return `${first_name} ${middle_name ? middle_name + ' ' : ''}${last_name}`.trim();
+    return `${first_name} ${
+      middle_name ? middle_name + " " : ""
+    }${last_name}`.trim();
   };
 
   // Format doctor full name
@@ -313,10 +246,10 @@ export default function QRScanner() {
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
       });
     } catch {
       return dateString;
@@ -327,10 +260,10 @@ export default function QRScanner() {
   const formatTime = (timeString) => {
     if (!timeString) return "N/A";
     try {
-      return new Date(`1970-01-01T${timeString}`).toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
+      return new Date(`1970-01-01T${timeString}`).toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
       });
     } catch {
       return timeString;
@@ -339,13 +272,32 @@ export default function QRScanner() {
 
   const statusInfo = getAppointmentStatusInfo();
 
+  const onNewScanResult = async (data) => {
+    const clean = sanitizeCode(data);
+    if (lastScannedRef.current === clean || scanCooldown) return;
+    lastScannedRef.current = clean;
+
+    setScanStatus("success");
+    await fetchAppointmentData(clean);
+
+    setTimeout(() => {
+      setScanStatus("ready");
+      lastScannedRef.current = "";
+    }, 3500);
+  };
+
   return (
     <div className="max-h-screen overflow-auto bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-7xl mx-auto py-8 px-6">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Appointment Verification</h1>
-          <p className="text-gray-600">Scan QR codes or manually enter appointment codes to verify patient appointments</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Appointment Verification
+          </h1>
+          <p className="text-gray-600">
+            Scan QR codes or manually enter appointment codes to verify patient
+            appointments
+          </p>
         </div>
 
         {/* Horizontal Layout */}
@@ -355,34 +307,25 @@ export default function QRScanner() {
             {/* Scanner Card */}
             <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">QR Code Scanner</h2>
-                <div className={`px-3 py-1 rounded-full text-sm font-medium border ${
-                  scanCooldown ? "bg-purple-100 border-purple-400 text-purple-700" : getStatusColor()
-                }`}>
+                <h2 className="text-xl font-semibold text-gray-900">
+                  QR Code Scanner
+                </h2>
+                <div
+                  className={`px-3 py-1 rounded-full text-sm font-medium border ${
+                    scanCooldown
+                      ? "bg-purple-100 border-purple-400 text-purple-700"
+                      : getStatusColor()
+                  }`}
+                >
                   {getStatusMessage()}
                 </div>
               </div>
 
               <div className="relative">
-                <div
-                  id="qr-reader"
-                  className="w-full h-64 mx-auto rounded-lg border-2 border-gray-300 overflow-hidden bg-black transition-all duration-300"
-                ></div>
-                
-                {/* Scanner Overlay with Square Box */}
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  {/* Square Scanning Box */}
-                  <div className="w-64 h-64 border-2 border-white rounded-lg relative">
-                    {/* Animated scanning line */}
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-green-400 animate-scan rounded-full shadow-lg shadow-green-400/50"></div>
-                    
-                    {/* Corner markers */}
-                    <div className="absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 border-green-400"></div>
-                    <div className="absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 border-green-400"></div>
-                    <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 border-green-400"></div>
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-green-400"></div>
-                  </div>
-                </div>
+                <QrReader
+                  onScan={onNewScanResult}
+                  onError={(err) => console.log("Error:", err)}
+                />
 
                 {/* Cooldown Overlay */}
                 {scanCooldown && (
@@ -398,10 +341,9 @@ export default function QRScanner() {
 
               <div className="mt-4 text-center">
                 <p className="text-sm text-gray-500">
-                  {scanCooldown 
-                    ? "Please wait before scanning next code" 
-                    : "Position QR code within the square frame"
-                  }
+                  {scanCooldown
+                    ? "Please wait before scanning next code"
+                    : "Position QR code within the square frame"}
                 </p>
                 {scanCooldown && (
                   <p className="text-xs text-purple-600 mt-1">
@@ -413,8 +355,10 @@ export default function QRScanner() {
 
             {/* Manual Input Card */}
             <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Manual Entry</h2>
-              
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                Manual Entry
+              </h2>
+
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -437,18 +381,31 @@ export default function QRScanner() {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div className="flex items-start space-x-3">
                     <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
-                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={3}
+                          d="M5 13l4 4L19 7"
+                        />
                       </svg>
                     </div>
                     <div>
-                      <p className="text-sm text-blue-800 font-medium">Auto-search Feature</p>
+                      <p className="text-sm text-blue-800 font-medium">
+                        Auto-search Feature
+                      </p>
                       <p className="text-xs text-blue-600 mt-1">
-                        Automatically searches for appointments as you type with debouncing
+                        Automatically searches for appointments as you type with
+                        debouncing
                       </p>
                     </div>
                   </div>
@@ -459,7 +416,9 @@ export default function QRScanner() {
 
           {/* Right Column - Results */}
           <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 h-fit sticky top-8">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Appointment Details</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Appointment Details
+            </h2>
 
             {loading ? (
               <div className="text-center py-12">
@@ -469,15 +428,25 @@ export default function QRScanner() {
             ) : appointmentData ? (
               <div className="space-y-6">
                 {/* Header Card with Status */}
-                <div className={`rounded-xl p-6 text-white ${statusInfo.headerColor}`}>
+                <div
+                  className={`rounded-xl p-6 text-white ${statusInfo.headerColor}`}
+                >
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-white text-opacity-90 text-sm font-medium">Appointment Code</p>
-                      <p className="text-2xl font-bold font-mono">{appointmentData.appointment_code}</p>
+                      <p className="text-white text-opacity-90 text-sm font-medium">
+                        Appointment Code
+                      </p>
+                      <p className="text-2xl font-bold font-mono">
+                        {appointmentData.appointment_code}
+                      </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-white text-opacity-90 text-sm font-medium">Status</p>
-                      <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${statusInfo.buttonColor} bg-opacity-90 text-white`}>
+                      <p className="text-white text-opacity-90 text-sm font-medium">
+                        Status
+                      </p>
+                      <div
+                        className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${statusInfo.buttonColor} bg-opacity-90 text-white`}
+                      >
                         <span className="text-sm font-medium">
                           {statusInfo.message}
                         </span>
@@ -489,26 +458,36 @@ export default function QRScanner() {
                 {/* Status Message */}
                 <div className={`p-4 rounded-lg border ${statusInfo.color}`}>
                   <div className="flex items-center gap-3">
-                    <div className="text-2xl">
-                      {statusInfo.icon}
-                    </div>
+                    <div className="text-2xl">{statusInfo.icon}</div>
                     <div>
-                      <p className={`font-medium ${
-                        appointmentStatus === "success" ? "text-green-800" : 
-                        appointmentStatus === "expired" ? "text-red-800" :
-                        appointmentStatus === "future" ? "text-blue-800" :
-                        appointmentStatus === "too_early" ? "text-yellow-800" :
-                        "text-orange-800"
-                      }`}>
+                      <p
+                        className={`font-medium ${
+                          appointmentStatus === "success"
+                            ? "text-green-800"
+                            : appointmentStatus === "expired"
+                            ? "text-red-800"
+                            : appointmentStatus === "future"
+                            ? "text-blue-800"
+                            : appointmentStatus === "too_early"
+                            ? "text-yellow-800"
+                            : "text-orange-800"
+                        }`}
+                      >
                         {error || statusInfo.message}
                       </p>
-                      <p className={`text-sm mt-1 ${
-                        appointmentStatus === "success" ? "text-green-600" : 
-                        appointmentStatus === "expired" ? "text-red-600" :
-                        appointmentStatus === "future" ? "text-blue-600" :
-                        appointmentStatus === "too_early" ? "text-yellow-600" :
-                        "text-orange-600"
-                      }`}>
+                      <p
+                        className={`text-sm mt-1 ${
+                          appointmentStatus === "success"
+                            ? "text-green-600"
+                            : appointmentStatus === "expired"
+                            ? "text-red-600"
+                            : appointmentStatus === "future"
+                            ? "text-blue-600"
+                            : appointmentStatus === "too_early"
+                            ? "text-yellow-600"
+                            : "text-orange-600"
+                        }`}
+                      >
                         {statusInfo.description}
                       </p>
                     </div>
@@ -518,25 +497,37 @@ export default function QRScanner() {
                 {/* Details Grid */}
                 <div className="grid gap-4">
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <p className="text-sm text-gray-500 font-medium mb-1">Patient Information</p>
-                    <p className="text-lg font-semibold text-gray-900">{getPatientFullName()}</p>
+                    <p className="text-sm text-gray-500 font-medium mb-1">
+                      Patient Information
+                    </p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {getPatientFullName()}
+                    </p>
                   </div>
-                  
+
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <p className="text-sm text-gray-500 font-medium mb-1">Assigned Doctor</p>
-                    <p className="text-lg font-semibold text-gray-900">{getDoctorFullName()}</p>
+                    <p className="text-sm text-gray-500 font-medium mb-1">
+                      Assigned Doctor
+                    </p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {getDoctorFullName()}
+                    </p>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <p className="text-sm text-gray-500 font-medium mb-1">Date</p>
+                      <p className="text-sm text-gray-500 font-medium mb-1">
+                        Date
+                      </p>
                       <p className="text-lg font-semibold text-gray-900">
                         {formatDate(appointmentData.date_scheduled)}
                       </p>
                     </div>
-                    
+
                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <p className="text-sm text-gray-500 font-medium mb-1">Time</p>
+                      <p className="text-sm text-gray-500 font-medium mb-1">
+                        Time
+                      </p>
                       <p className="text-lg font-semibold text-gray-900">
                         {formatTime(appointmentData.time_scheduled)}
                       </p>
@@ -557,7 +548,8 @@ export default function QRScanner() {
                 )}
 
                 {/* Action buttons for other statuses */}
-                {(appointmentStatus === "expired" || appointmentStatus === "too_late") && (
+                {(appointmentStatus === "expired" ||
+                  appointmentStatus === "too_late") && (
                   <div className="flex gap-3 pt-4">
                     <button className="flex-1 bg-red-600 text-white py-3 px-6 rounded-xl font-semibold hover:bg-red-700 transition-colors duration-200">
                       Contact Patient
@@ -593,24 +585,39 @@ export default function QRScanner() {
             ) : (
               <div className="text-center py-12">
                 <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  <svg
+                    className="w-8 h-8 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Appointment Data</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  No Appointment Data
+                </h3>
                 <p className="text-gray-500 text-sm">
                   Scan a QR code or enter an appointment code to view details
                 </p>
                 {error && (
-                  <div className={`mt-4 p-3 rounded-lg ${
-                    appointmentStatus === "expired" || appointmentStatus === "too_late" 
-                      ? "bg-red-50 border border-red-200 text-red-700" :
-                    appointmentStatus === "future"
-                      ? "bg-blue-50 border border-blue-200 text-blue-700" :
-                    appointmentStatus === "too_early"
-                      ? "bg-yellow-50 border border-yellow-200 text-yellow-700" 
-                      : "bg-yellow-50 border border-yellow-200 text-yellow-700"
-                  }`}>
+                  <div
+                    className={`mt-4 p-3 rounded-lg ${
+                      appointmentStatus === "expired" ||
+                      appointmentStatus === "too_late"
+                        ? "bg-red-50 border border-red-200 text-red-700"
+                        : appointmentStatus === "future"
+                        ? "bg-blue-50 border border-blue-200 text-blue-700"
+                        : appointmentStatus === "too_early"
+                        ? "bg-yellow-50 border border-yellow-200 text-yellow-700"
+                        : "bg-yellow-50 border border-yellow-200 text-yellow-700"
+                    }`}
+                  >
                     <p className="text-sm font-medium">{error}</p>
                   </div>
                 )}
@@ -619,8 +626,6 @@ export default function QRScanner() {
           </div>
         </div>
       </div>
-
-            
 
       {/* Add custom CSS for scanning animation */}
       <style jsx>{`

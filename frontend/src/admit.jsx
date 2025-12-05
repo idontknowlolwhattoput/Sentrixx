@@ -5,6 +5,8 @@ const HospitalAdmittanceSystem = () => {
   const [apiPatients, setApiPatients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [admissionSuccess, setAdmissionSuccess] = useState(false);
 
   // Simple data structure for wards
   const [wards, setWards] = useState([
@@ -48,94 +50,26 @@ const HospitalAdmittanceSystem = () => {
   // Available patients waiting for beds
   const [availablePatients, setAvailablePatients] = useState([]);
   
-  // Form state for patient assignment
+  // Form state for patient assignment - reduced to only used fields
   const [assignmentForm, setAssignmentForm] = useState({
-    // Patient Identification
-    patientId: null,
-    
-    // Admission Information
-    admissionType: '', // 'Emergency', 'Elective', 'Urgent', 'Transfer'
-    admissionDate: new Date().toISOString().split('T')[0],
-    admissionTime: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-    referringPhysician: '',
-    referralHospital: '',
-    modeOfArrival: '', // 'Ambulance', 'Private Vehicle', 'Walk-in', 'Police'
-    triageCategory: '', // 'Resuscitation', 'Emergency', 'Urgent', 'Semi-urgent', 'Non-urgent'
-    insuranceProvider: '',
-    policyNumber: '',
-    
-    // Clinical Assessment
-    chiefComplaint: '', // Primary reason for admission
-    historyOfPresentIllness: '',
-    pastMedicalHistory: '',
-    surgicalHistory: '',
-    socialHistory: '', // Smoking, alcohol, drug use
-    familyHistory: '',
-    
-    // Physical Examination (beyond vitals)
-    generalAppearance: '', // 'Alert', 'Lethargic', 'Distressed', etc.
-    neurologicalStatus: '',
-    cardiovascularFindings: '',
-    respiratoryFindings: '',
-    abdominalFindings: '',
-    musculoskeletalFindings: '',
-    skinFindings: '',
-    
-    // Initial Nursing Assessment
-    painScore: '', // 0-10 scale
-    painLocation: '',
-    painCharacter: '', // 'Sharp', 'Dull', 'Burning', etc.
-    fallRiskScore: '', // Morse Fall Scale
-    pressureUlcerRisk: '', // Braden Scale
-    nutritionalAssessment: '',
-    mobilityStatus: '', // 'Independent', 'Requires Assistance', 'Bedridden'
-    
-    // Diagnostic Tests Ordered
-    labTests: '', // Array of lab tests
-    imagingStudies: '', // X-ray, CT, MRI, etc.
-    otherDiagnostics: '',
-    
-    // Initial Treatment Orders
-    initialMedications: '',
-    ivTherapy: '',
-    oxygenTherapy: '',
-    dietaryOrders: '',
-    activityOrders: '',
-    isolationPrecautions: '', // 'Contact', 'Droplet', 'Airborne', 'None'
-    
-    // Nursing Care Plan
-    nursingDiagnosis: '',
-    expectedOutcomes: '',
-    nursingInterventions: '',
-    
-    // Consent & Documentation
-    consentObtained: false,
-    consentType: '', // 'Treatment', 'Surgery', 'Blood Transfusion', etc.
-    patientBelongings: '', // List of patient's belongings
-    valuablesDeposited: false,
-    valuablesList: '',
-    
-    // Special Notes
-    codeStatus: '', // 'Full Code', 'DNR', 'DNR/DNI'
-    advanceDirectives: '',
-    specialNeeds: '', // Language interpreter, disabilities, etc.
-    religiousConsiderations: '',
-    
-    // Admission Team
-    admittingNurse: '',
-    chargeNurse: '',
-    admittingResident: '',
-    
-    // Bed Assignment Details
-    preferredBedType: '', // 'ICU', 'Private', 'Semi-private', 'Ward'
-    specialEquipment: '', // 'IV Pump', 'Monitor', 'Ventilator', etc.
-    
-    // Discharge Planning (Initial)
-    estimatedLOS: '', // Length of Stay in days
-    dischargeNeeds: '', // 'Home Health', 'Rehab', 'SNF'
-    
-    // Medical Information
-    diagnosis: '',
+    patient_id: null,
+    admission_type: '',
+    admission_date: new Date().toISOString().split('T')[0],
+    admission_time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+    mode_of_arrival: '',
+    triage_category: '',
+    insurance_provider: '',
+    chief_complaint: '',
+    pain_score: '',
+    pain_location: '',
+    fall_risk_score: '',
+    general_appearance: '',
+    mobility_status: '',
+    special_needs: '',
+    patient_diagnosis: '',
+    dietary_orders: '',
+    activity_orders: '',
+    isolation_precautions: '',
   });
 
   // UI state
@@ -148,12 +82,15 @@ const HospitalAdmittanceSystem = () => {
   // Find selected ward
   const currentWard = wards.find(w => w.id === selectedWard);
 
+  // API Base URL
+  const API_BASE_URL = 'http://localhost:5000';
+
   // Fetch patients from API
   useEffect(() => {
     const fetchPatients = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('http://localhost:5000/patient/patients');
+        const response = await fetch(`${API_BASE_URL}/patient/patients`);
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -256,9 +193,11 @@ const HospitalAdmittanceSystem = () => {
     setSelectedPatientForAssignment(patient);
     setAssignmentForm({
       ...assignmentForm,
-      patientId: patient.id,
-      admissionDate: new Date().toISOString().split('T')[0],
-      admissionTime: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      patient_id: patient.id,
+      ward_id: selectedWard,
+      bed_number: selectedBed?.id,
+      admission_date: new Date().toISOString().split('T')[0],
+      admission_time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
     });
     setShowPatientList(false);
     setShowAssignmentForm(true);
@@ -282,216 +221,126 @@ const HospitalAdmittanceSystem = () => {
     });
   };
 
-  // Generate random medical condition
-  const generateRandomCondition = () => {
-    const conditions = [
-      'Hypertension', 'Diabetes Type 2', 'Asthma', 'Migraine', 'Rheumatoid Arthritis',
-      'Influenza', 'Acute Bronchitis', 'Allergic Rhinitis', 'Femur Fracture', 'Acute Appendicitis',
-      'Community-Acquired Pneumonia', 'COVID-19', 'Chronic Gastritis', 'Urinary Tract Infection',
-      'Chronic Sinusitis', 'Herniated Disc', 'Generalized Anxiety Disorder', 'Major Depressive Disorder',
-      'Chronic Insomnia', 'Benign Paroxysmal Vertigo', 'Myocardial Infarction', 'Stroke',
-      'Chronic Kidney Disease', 'Liver Cirrhosis', 'Breast Cancer'
-    ];
-    return conditions[Math.floor(Math.random() * conditions.length)];
-  };
-
-  // Assign patient to bed with complete medical record
-  const assignPatient = () => {
+  // Submit admission to API
+  const submitAdmission = async () => {
     if (!selectedBed || !selectedPatientForAssignment) return;
 
-    const patient = selectedPatientForAssignment;
+    setIsSubmitting(true);
+    setAdmissionSuccess(false);
     
-    // Create comprehensive patient record
-    const patientRecord = {
-      ...patient,
-      
-      // Admission Information
-      admissionType: assignmentForm.admissionType,
-      admissionDate: assignmentForm.admissionDate,
-      admissionTime: assignmentForm.admissionTime,
-      referringPhysician: assignmentForm.referringPhysician,
-      referralHospital: assignmentForm.referralHospital,
-      modeOfArrival: assignmentForm.modeOfArrival,
-      triageCategory: assignmentForm.triageCategory,
-      insuranceProvider: assignmentForm.insuranceProvider,
-      policyNumber: assignmentForm.policyNumber,
-      
-      // Clinical Information
-      chiefComplaint: assignmentForm.chiefComplaint,
-      historyOfPresentIllness: assignmentForm.historyOfPresentIllness,
-      pastMedicalHistory: assignmentForm.pastMedicalHistory,
-      surgicalHistory: assignmentForm.surgicalHistory,
-      socialHistory: assignmentForm.socialHistory,
-      familyHistory: assignmentForm.familyHistory,
-      
-      // Physical Examination
-      generalAppearance: assignmentForm.generalAppearance,
-      neurologicalStatus: assignmentForm.neurologicalStatus,
-      cardiovascularFindings: assignmentForm.cardiovascularFindings,
-      respiratoryFindings: assignmentForm.respiratoryFindings,
-      abdominalFindings: assignmentForm.abdominalFindings,
-      musculoskeletalFindings: assignmentForm.musculoskeletalFindings,
-      skinFindings: assignmentForm.skinFindings,
-      
-      // Nursing Assessment
-      painScore: assignmentForm.painScore,
-      painLocation: assignmentForm.painLocation,
-      painCharacter: assignmentForm.painCharacter,
-      fallRiskScore: assignmentForm.fallRiskScore,
-      pressureUlcerRisk: assignmentForm.pressureUlcerRisk,
-      nutritionalAssessment: assignmentForm.nutritionalAssessment,
-      mobilityStatus: assignmentForm.mobilityStatus,
-      
-      // Medical Information
-      ward: currentWard.name,
-      bedNumber: selectedBed.id,
-      diagnosis: assignmentForm.diagnosis || generateRandomCondition(),
-      
-      // Treatment Orders
-      labTests: assignmentForm.labTests,
-      imagingStudies: assignmentForm.imagingStudies,
-      otherDiagnostics: assignmentForm.otherDiagnostics,
-      initialMedications: assignmentForm.initialMedications,
-      ivTherapy: assignmentForm.ivTherapy,
-      oxygenTherapy: assignmentForm.oxygenTherapy,
-      dietaryOrders: assignmentForm.dietaryOrders,
-      activityOrders: assignmentForm.activityOrders,
-      isolationPrecautions: assignmentForm.isolationPrecautions,
-      
-      // Nursing Care Plan
-      nursingDiagnosis: assignmentForm.nursingDiagnosis,
-      expectedOutcomes: assignmentForm.expectedOutcomes,
-      nursingInterventions: assignmentForm.nursingInterventions,
-      
-      // Consent & Documentation
-      consentObtained: assignmentForm.consentObtained,
-      consentType: assignmentForm.consentType,
-      patientBelongings: assignmentForm.patientBelongings,
-      valuablesDeposited: assignmentForm.valuablesDeposited,
-      valuablesList: assignmentForm.valuablesList,
-      
-      // Special Notes
-      codeStatus: assignmentForm.codeStatus,
-      advanceDirectives: assignmentForm.advanceDirectives,
-      specialNeeds: assignmentForm.specialNeeds,
-      religiousConsiderations: assignmentForm.religiousConsiderations,
-      
-      // Admission Team
-      admittingNurse: assignmentForm.admittingNurse,
-      chargeNurse: assignmentForm.chargeNurse,
-      admittingResident: assignmentForm.admittingResident,
-      
-      // Bed Assignment
-      preferredBedType: assignmentForm.preferredBedType,
-      specialEquipment: assignmentForm.specialEquipment,
-      
-      // Discharge Planning
-      estimatedLOS: assignmentForm.estimatedLOS,
-      dischargeNeeds: assignmentForm.dischargeNeeds,
-      
-      // Status tracking
-      status: 'Admitted',
-      lastVitalsCheck: new Date().toISOString(),
-      nurseNotes: []
-    };
+    try {
+      // Prepare the data for API
+      const admissionData = {
+        ...assignmentForm,
+        patient_id: selectedPatientForAssignment.id,
+        ward_id: selectedWard,
+        bed_number: selectedBed.id
+      };
 
-    // Update the wards
-    const updatedWards = wards.map(ward => {
-      if (ward.id === selectedWard) {
-        const updatedBeds = ward.beds.map(b => {
-          if (b.id === selectedBed.id) {
-            return { 
-              ...b, 
-              patient: {
-                id: patient.id,
-                name: patient.name,
-                fullName: patient.fullName
-              }, 
-              patientRecord: patientRecord,
-              status: 'occupied' 
-            };
-          }
-          return b;
-        });
-        return { ...ward, beds: updatedBeds };
+      // Log the data being sent (for debugging)
+      console.log('Submitting admission data:', admissionData);
+
+      // Send POST request to admission API
+      const response = await fetch(`${API_BASE_URL}/api/admissions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(admissionData)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || `Failed to create admission: ${response.status}`);
       }
-      return ward;
-    });
 
-    setWards(updatedWards);
-    
-    // Remove patient from available list
-    setAvailablePatients(availablePatients.filter(p => p.id !== patient.id));
-    
-    // Reset form and selections
-    setSelectedBed(null);
-    setSelectedPatientForAssignment(null);
-    setShowAssignmentForm(false);
-    resetAssignmentForm();
+      if (result.success) {
+        setAdmissionSuccess(true);
+        
+        // Update local state after successful API submission
+        const patient = selectedPatientForAssignment;
+        
+        const patientRecord = {
+          ...patient,
+          admission_id: result.admission_id,
+          admission_date: admissionData.admission_date,
+          admission_time: admissionData.admission_time,
+          admission_type: admissionData.admission_type,
+          ward: currentWard.name,
+          bed_number: selectedBed.id,
+          diagnosis: admissionData.patient_diagnosis,
+          chief_complaint: admissionData.chief_complaint,
+          triage_category: admissionData.triage_category,
+          status: 'Admitted'
+        };
+
+        // Update the wards
+        const updatedWards = wards.map(ward => {
+          if (ward.id === selectedWard) {
+            const updatedBeds = ward.beds.map(b => {
+              if (b.id === selectedBed.id) {
+                return { 
+                  ...b, 
+                  patient: {
+                    id: patient.id,
+                    name: patient.name,
+                    fullName: patient.fullName
+                  }, 
+                  patientRecord: patientRecord,
+                  status: 'occupied' 
+                };
+              }
+              return b;
+            });
+            return { ...ward, beds: updatedBeds };
+          }
+          return ward;
+        });
+
+        setWards(updatedWards);
+        
+        // Remove patient from available list
+        setAvailablePatients(availablePatients.filter(p => p.id !== patient.id));
+        
+        // Reset form and selections after 2 seconds
+        setTimeout(() => {
+          setSelectedBed(null);
+          setSelectedPatientForAssignment(null);
+          setShowAssignmentForm(false);
+          resetAssignmentForm();
+          setAdmissionSuccess(false);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error submitting admission:', error);
+      alert(`Failed to create admission: ${error.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Reset assignment form
   const resetAssignmentForm = () => {
     setAssignmentForm({
-      patientId: null,
-      admissionType: '',
-      admissionDate: new Date().toISOString().split('T')[0],
-      admissionTime: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      referringPhysician: '',
-      referralHospital: '',
-      modeOfArrival: '',
-      triageCategory: '',
-      insuranceProvider: '',
-      policyNumber: '',
-      chiefComplaint: '',
-      historyOfPresentIllness: '',
-      pastMedicalHistory: '',
-      surgicalHistory: '',
-      socialHistory: '',
-      familyHistory: '',
-      generalAppearance: '',
-      neurologicalStatus: '',
-      cardiovascularFindings: '',
-      respiratoryFindings: '',
-      abdominalFindings: '',
-      musculoskeletalFindings: '',
-      skinFindings: '',
-      painScore: '',
-      painLocation: '',
-      painCharacter: '',
-      fallRiskScore: '',
-      pressureUlcerRisk: '',
-      nutritionalAssessment: '',
-      mobilityStatus: '',
-      labTests: '',
-      imagingStudies: '',
-      otherDiagnostics: '',
-      initialMedications: '',
-      ivTherapy: '',
-      oxygenTherapy: '',
-      dietaryOrders: '',
-      activityOrders: '',
-      isolationPrecautions: '',
-      nursingDiagnosis: '',
-      expectedOutcomes: '',
-      nursingInterventions: '',
-      consentObtained: false,
-      consentType: '',
-      patientBelongings: '',
-      valuablesDeposited: false,
-      valuablesList: '',
-      codeStatus: '',
-      advanceDirectives: '',
-      specialNeeds: '',
-      religiousConsiderations: '',
-      admittingNurse: '',
-      chargeNurse: '',
-      admittingResident: '',
-      preferredBedType: '',
-      specialEquipment: '',
-      estimatedLOS: '',
-      dischargeNeeds: '',
-      diagnosis: '',
+      patient_id: null,
+      admission_type: '',
+      admission_date: new Date().toISOString().split('T')[0],
+      admission_time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+      mode_of_arrival: '',
+      triage_category: '',
+      insurance_provider: '',
+      chief_complaint: '',
+      pain_score: '',
+      pain_location: '',
+      fall_risk_score: '',
+      general_appearance: '',
+      mobility_status: '',
+      special_needs: '',
+      patient_diagnosis: '',
+      dietary_orders: '',
+      activity_orders: '',
+      isolation_precautions: '',
     });
   };
 
@@ -556,7 +405,7 @@ const HospitalAdmittanceSystem = () => {
 
   return (
     <div className="max-w-screen bg-gray-50 p-4 md:p-8 h-screen overflow-y-auto">
-  <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800">Hospital Bed Management System</h1>
           <p className="text-gray-600 mt-2">
@@ -661,7 +510,15 @@ const HospitalAdmittanceSystem = () => {
                   </div>
                 ) : availablePatients.length > 0 ? (
                   availablePatients.map(patient => (
-                    <div key={patient.id} className="p-3 border border-gray-200 rounded-lg hover:bg-blue-50 transition cursor-pointer">
+                    <div 
+                      key={patient.id} 
+                      className="p-3 border border-gray-200 rounded-lg hover:bg-blue-50 transition cursor-pointer"
+                      onClick={() => {
+                        if (selectedBed && !selectedBed.patient) {
+                          handlePatientSelectForAssignment(patient);
+                        }
+                      }}
+                    >
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-medium text-gray-800">{patient.fullName || patient.name}</p>
@@ -812,41 +669,41 @@ const HospitalAdmittanceSystem = () => {
                         </div>
 
                         {/* Admission Details */}
-                        {selectedBed.patientRecord?.admissionType && (
+                        {selectedBed.patientRecord?.admission_type && (
                           <div className="mb-4">
                             <h5 className="font-medium text-gray-700 mb-2">Admission Details</h5>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                               <div>
                                 <span className="text-gray-500">Type:</span>
-                                <p className="font-medium">{selectedBed.patientRecord.admissionType}</p>
+                                <p className="font-medium">{selectedBed.patientRecord.admission_type}</p>
                               </div>
                               <div>
                                 <span className="text-gray-500">Arrival:</span>
-                                <p className="font-medium">{selectedBed.patientRecord.modeOfArrival}</p>
+                                <p className="font-medium">{selectedBed.patientRecord.mode_of_arrival}</p>
                               </div>
                               <div>
                                 <span className="text-gray-500">Triage:</span>
-                                <p className="font-medium">{selectedBed.patientRecord.triageCategory}</p>
+                                <p className="font-medium">{selectedBed.patientRecord.triage_category}</p>
                               </div>
                             </div>
                           </div>
                         )}
 
                         {/* Clinical Information */}
-                        {selectedBed.patientRecord?.chiefComplaint && (
+                        {selectedBed.patientRecord?.chief_complaint && (
                           <div className="mb-4">
                             <h5 className="font-medium text-gray-700 mb-2">Clinical Presentation</h5>
                             <p className="text-sm text-gray-700 mb-2">
-                              <span className="font-medium">Chief Complaint:</span> {selectedBed.patientRecord.chiefComplaint}
+                              <span className="font-medium">Chief Complaint:</span> {selectedBed.patientRecord.chief_complaint}
                             </p>
-                            {selectedBed.patientRecord.painScore && (
+                            {selectedBed.patientRecord.pain_score && (
                               <div className="mt-2">
                                 <span className="font-medium text-sm">Pain: </span>
                                 <span className="text-sm bg-red-100 text-red-800 px-2 py-1 rounded">
-                                  Score {selectedBed.patientRecord.painScore}/10
+                                  Score {selectedBed.patientRecord.pain_score}/10
                                 </span>
-                                {selectedBed.patientRecord.painLocation && (
-                                  <span className="text-sm text-gray-600 ml-2">({selectedBed.patientRecord.painLocation})</span>
+                                {selectedBed.patientRecord.pain_location && (
+                                  <span className="text-sm text-gray-600 ml-2">({selectedBed.patientRecord.pain_location})</span>
                                 )}
                               </div>
                             )}
@@ -854,61 +711,61 @@ const HospitalAdmittanceSystem = () => {
                         )}
 
                         {/* Medical Information */}
-                        {selectedBed.patientRecord?.diagnosis && (
+                        {selectedBed.patientRecord?.patient_diagnosis && (
                           <div className="mb-4">
                             <h5 className="font-medium text-gray-700 mb-2">Medical Information</h5>
                             <div className="bg-blue-50 p-3 rounded-lg">
                               <span className="text-sm text-gray-500">Diagnosis</span>
-                              <p className="font-medium">{selectedBed.patientRecord?.diagnosis || 'N/A'}</p>
+                              <p className="font-medium">{selectedBed.patientRecord?.patient_diagnosis || 'N/A'}</p>
                             </div>
                           </div>
                         )}
 
                         {/* Nursing Assessment */}
-                        {(selectedBed.patientRecord?.fallRiskScore || selectedBed.patientRecord?.mobilityStatus) && (
+                        {(selectedBed.patientRecord?.fall_risk_score || selectedBed.patientRecord?.mobility_status) && (
                           <div className="mb-4 bg-green-50 p-4 rounded-lg">
                             <h5 className="font-medium text-gray-700 mb-2">Nursing Assessment</h5>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                               <div>
                                 <span className="text-gray-500">Fall Risk:</span>
-                                <p className={`font-medium ${selectedBed.patientRecord.fallRiskScore === 'high' ? 'text-red-600' : selectedBed.patientRecord.fallRiskScore === 'medium' ? 'text-yellow-600' : 'text-green-600'}`}>
-                                  {selectedBed.patientRecord.fallRiskScore?.toUpperCase() || 'Not Assessed'}
+                                <p className={`font-medium ${selectedBed.patientRecord.fall_risk_score === 'high' ? 'text-red-600' : selectedBed.patientRecord.fall_risk_score === 'medium' ? 'text-yellow-600' : 'text-green-600'}`}>
+                                  {selectedBed.patientRecord.fall_risk_score?.toUpperCase() || 'Not Assessed'}
                                 </p>
                               </div>
                               <div>
                                 <span className="text-gray-500">Mobility:</span>
-                                <p className="font-medium">{selectedBed.patientRecord.mobilityStatus}</p>
+                                <p className="font-medium">{selectedBed.patientRecord.mobility_status}</p>
                               </div>
                               <div>
                                 <span className="text-gray-500">Diet:</span>
-                                <p className="font-medium">{selectedBed.patientRecord.dietaryOrders}</p>
+                                <p className="font-medium">{selectedBed.patientRecord.dietary_orders}</p>
                               </div>
                               <div>
                                 <span className="text-gray-500">Isolation:</span>
-                                <p className="font-medium">{selectedBed.patientRecord.isolationPrecautions}</p>
+                                <p className="font-medium">{selectedBed.patientRecord.isolation_precautions}</p>
                               </div>
                             </div>
                           </div>
                         )}
 
                         {/* Special Notes */}
-                        {(selectedBed.patientRecord?.codeStatus || selectedBed.patientRecord?.specialNeeds) && (
+                        {(selectedBed.patientRecord?.code_status || selectedBed.patientRecord?.special_needs) && (
                           <div className="mb-4 bg-yellow-50 p-4 rounded-lg">
                             <h5 className="font-medium text-gray-700 mb-2">Special Notes</h5>
                             <div className="space-y-1 text-sm">
-                              {selectedBed.patientRecord.codeStatus && (
+                              {selectedBed.patientRecord.code_status && (
                                 <p>
-                                  <span className="font-medium">Code Status:</span> {selectedBed.patientRecord.codeStatus}
+                                  <span className="font-medium">Code Status:</span> {selectedBed.patientRecord.code_status}
                                 </p>
                               )}
-                              {selectedBed.patientRecord.specialNeeds && (
+                              {selectedBed.patientRecord.special_needs && (
                                 <p>
-                                  <span className="font-medium">Special Needs:</span> {selectedBed.patientRecord.specialNeeds}
+                                  <span className="font-medium">Special Needs:</span> {selectedBed.patientRecord.special_needs}
                                 </p>
                               )}
-                              {selectedBed.patientRecord.admittingNurse && (
+                              {selectedBed.patientRecord.admitting_nurse && (
                                 <p>
-                                  <span className="font-medium">Admitted by:</span> {selectedBed.patientRecord.admittingNurse}
+                                  <span className="font-medium">Admitted by:</span> {selectedBed.patientRecord.admitting_nurse}
                                 </p>
                               )}
                             </div>
@@ -932,6 +789,17 @@ const HospitalAdmittanceSystem = () => {
                     <div className="space-y-4">
                       <p className="text-gray-600">This bed is available for patient assignment.</p>
                       
+                      {admissionSuccess && (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center">
+                            <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <p className="text-green-700 font-medium">Admission created successfully!</p>
+                          </div>
+                        </div>
+                      )}
+                      
                       {showAssignmentForm ? (
                         // Assignment Form
                         <div className="bg-white p-4 rounded-lg border border-gray-200 max-h-[600px] overflow-y-auto">
@@ -946,7 +814,13 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Admission Type *
                                   </label>
-                                  <select name="admissionType" value={assignmentForm.admissionType} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg" required>
+                                  <select 
+                                    name="admission_type" 
+                                    value={assignmentForm.admission_type} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg" 
+                                    required
+                                  >
                                     <option value="">Select type</option>
                                     <option value="emergency">Emergency</option>
                                     <option value="elective">Elective</option>
@@ -959,7 +833,12 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Mode of Arrival
                                   </label>
-                                  <select name="modeOfArrival" value={assignmentForm.modeOfArrival} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg">
+                                  <select 
+                                    name="mode_of_arrival" 
+                                    value={assignmentForm.mode_of_arrival} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg"
+                                  >
                                     <option value="">Select</option>
                                     <option value="ambulance">Ambulance</option>
                                     <option value="private">Private Vehicle</option>
@@ -973,7 +852,13 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Triage Category *
                                   </label>
-                                  <select name="triageCategory" value={assignmentForm.triageCategory} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg" required>
+                                  <select 
+                                    name="triage_category" 
+                                    value={assignmentForm.triage_category} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg" 
+                                    required
+                                  >
                                     <option value="">Select category</option>
                                     <option value="resuscitation">Resuscitation (Red)</option>
                                     <option value="emergency">Emergency (Orange)</option>
@@ -987,7 +872,14 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Insurance Provider
                                   </label>
-                                  <input type="text" name="insuranceProvider" value={assignmentForm.insuranceProvider} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg" placeholder="e.g., PhilHealth, Maxicare" />
+                                  <input 
+                                    type="text" 
+                                    name="insurance_provider" 
+                                    value={assignmentForm.insurance_provider} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg" 
+                                    placeholder="e.g., PhilHealth, Maxicare" 
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -1000,7 +892,15 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Chief Complaint *
                                   </label>
-                                  <textarea name="chiefComplaint" value={assignmentForm.chiefComplaint} onChange={handleTextareaChange} className="w-full p-2 border border-gray-300 rounded-lg" rows="2" placeholder="Primary reason for admission in patient's own words" required />
+                                  <textarea 
+                                    name="chief_complaint" 
+                                    value={assignmentForm.chief_complaint} 
+                                    onChange={handleTextareaChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg" 
+                                    rows="2" 
+                                    placeholder="Primary reason for admission in patient's own words" 
+                                    required 
+                                  />
                                 </div>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1009,11 +909,23 @@ const HospitalAdmittanceSystem = () => {
                                       Pain Assessment
                                     </label>
                                     <div className="flex items-center space-x-2">
-                                      <select name="painScore" value={assignmentForm.painScore} onChange={handleFormChange} className="flex-1 p-2 border border-gray-300 rounded-lg">
+                                      <select 
+                                        name="pain_score" 
+                                        value={assignmentForm.pain_score} 
+                                        onChange={handleFormChange} 
+                                        className="flex-1 p-2 border border-gray-300 rounded-lg"
+                                      >
                                         <option value="">Pain Score (0-10)</option>
                                         {[0,1,2,3,4,5,6,7,8,9,10].map(num => <option key={num} value={num}>{num}</option>)}
                                       </select>
-                                      <input type="text" name="painLocation" value={assignmentForm.painLocation} onChange={handleFormChange} className="flex-1 p-2 border border-gray-300 rounded-lg" placeholder="Location" />
+                                      <input 
+                                        type="text" 
+                                        name="pain_location" 
+                                        value={assignmentForm.pain_location} 
+                                        onChange={handleFormChange} 
+                                        className="flex-1 p-2 border border-gray-300 rounded-lg" 
+                                        placeholder="Location" 
+                                      />
                                     </div>
                                   </div>
                                   
@@ -1021,7 +933,12 @@ const HospitalAdmittanceSystem = () => {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                       Fall Risk Score (Morse)
                                     </label>
-                                    <select name="fallRiskScore" value={assignmentForm.fallRiskScore} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg">
+                                    <select 
+                                      name="fall_risk_score" 
+                                      value={assignmentForm.fall_risk_score} 
+                                      onChange={handleFormChange} 
+                                      className="w-full p-2 border border-gray-300 rounded-lg"
+                                    >
                                       <option value="">Select score</option>
                                       <option value="low">Low Risk (0-24)</option>
                                       <option value="medium">Medium Risk (25-50)</option>
@@ -1040,7 +957,12 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     General Appearance
                                   </label>
-                                  <select name="generalAppearance" value={assignmentForm.generalAppearance} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg">
+                                  <select 
+                                    name="general_appearance" 
+                                    value={assignmentForm.general_appearance} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg"
+                                  >
                                     <option value="">Select</option>
                                     <option value="alert">Alert and Oriented</option>
                                     <option value="lethargic">Lethargic</option>
@@ -1054,7 +976,12 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Mobility Status
                                   </label>
-                                  <select name="mobilityStatus" value={assignmentForm.mobilityStatus} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg">
+                                  <select 
+                                    name="mobility_status" 
+                                    value={assignmentForm.mobility_status} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg"
+                                  >
                                     <option value="">Select</option>
                                     <option value="independent">Independent</option>
                                     <option value="assistance">Requires Assistance</option>
@@ -1068,7 +995,14 @@ const HospitalAdmittanceSystem = () => {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                   Special Needs & Considerations
                                 </label>
-                                <textarea name="specialNeeds" value={assignmentForm.specialNeeds} onChange={handleTextareaChange} className="w-full p-2 border border-gray-300 rounded-lg" rows="2" placeholder="Language barriers, disabilities, religious needs, etc." />
+                                <textarea 
+                                  name="special_needs" 
+                                  value={assignmentForm.special_needs} 
+                                  onChange={handleTextareaChange} 
+                                  className="w-full p-2 border border-gray-300 rounded-lg" 
+                                  rows="2" 
+                                  placeholder="Language barriers, disabilities, religious needs, etc." 
+                                />
                               </div>
                             </div>
 
@@ -1080,7 +1014,15 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Primary Diagnosis *
                                   </label>
-                                  <input type="text" name="diagnosis" value={assignmentForm.diagnosis} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg" placeholder="e.g., Acute Appendicitis" required />
+                                  <input 
+                                    type="text" 
+                                    name="patient_diagnosis" 
+                                    value={assignmentForm.patient_diagnosis} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg" 
+                                    placeholder="e.g., Acute Appendicitis" 
+                                    required 
+                                  />
                                 </div>
                               </div>
                             </div>
@@ -1093,7 +1035,12 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Dietary Orders
                                   </label>
-                                  <select name="dietaryOrders" value={assignmentForm.dietaryOrders} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg">
+                                  <select 
+                                    name="dietary_orders" 
+                                    value={assignmentForm.dietary_orders} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg"
+                                  >
                                     <option value="">Select diet</option>
                                     <option value="regular">Regular Diet</option>
                                     <option value="soft">Soft Diet</option>
@@ -1109,7 +1056,12 @@ const HospitalAdmittanceSystem = () => {
                                   <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Activity Orders
                                   </label>
-                                  <select name="activityOrders" value={assignmentForm.activityOrders} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg">
+                                  <select 
+                                    name="activity_orders" 
+                                    value={assignmentForm.activity_orders} 
+                                    onChange={handleFormChange} 
+                                    className="w-full p-2 border border-gray-300 rounded-lg"
+                                  >
                                     <option value="">Select activity level</option>
                                     <option value="adlib">Ad Lib (as tolerated)</option>
                                     <option value="ambulate">Ambulate with Assistance</option>
@@ -1123,7 +1075,12 @@ const HospitalAdmittanceSystem = () => {
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                   Isolation Precautions
                                 </label>
-                                <select name="isolationPrecautions" value={assignmentForm.isolationPrecautions} onChange={handleFormChange} className="w-full p-2 border border-gray-300 rounded-lg">
+                                <select 
+                                  name="isolation_precautions" 
+                                  value={assignmentForm.isolation_precautions} 
+                                  onChange={handleFormChange} 
+                                  className="w-full p-2 border border-gray-300 rounded-lg"
+                                >
                                   <option value="none">No Isolation Required</option>
                                   <option value="contact">Contact Precautions</option>
                                   <option value="droplet">Droplet Precautions</option>
@@ -1136,10 +1093,20 @@ const HospitalAdmittanceSystem = () => {
                             {/* Action Buttons */}
                             <div className="flex space-x-3 pt-4 border-t">
                               <button
-                                onClick={assignPatient}
-                                className="flex-1 py-3 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg transition"
+                                onClick={submitAdmission}
+                                disabled={isSubmitting}
+                                className={`flex-1 py-3 text-white font-medium rounded-lg transition flex items-center justify-center ${
+                                  isSubmitting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600'
+                                }`}
                               >
-                                Complete Admission
+                                {isSubmitting ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                                    Processing...
+                                  </>
+                                ) : (
+                                  'Complete Admission'
+                                )}
                               </button>
                               <button
                                 onClick={() => {
@@ -1147,6 +1114,7 @@ const HospitalAdmittanceSystem = () => {
                                   setSelectedPatientForAssignment(null);
                                   resetAssignmentForm();
                                 }}
+                                disabled={isSubmitting}
                                 className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition"
                               >
                                 Cancel
@@ -1233,7 +1201,7 @@ const HospitalAdmittanceSystem = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">Available Now</p>
-                <p className="text-xl font-bold text-gray-800">{availableBeds} Beds</p>
+                <p className="text-xl font-bold text-green-800">{availableBeds} Beds</p>
               </div>
             </div>
           </div>
