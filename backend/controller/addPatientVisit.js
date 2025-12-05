@@ -115,7 +115,7 @@ export const AddPatientVisit = async (req, res) => {
         }
       };
 
-      // SQL Query - keep date_scheduled as DATE and time_scheduled as TIME
+
       const query = `
         INSERT INTO patient_visit_record
           (patient_id, employee_id, date_scheduled, time_scheduled, visit_type, visit_purpose_title, visit_chief_complaint, appointment_code) 

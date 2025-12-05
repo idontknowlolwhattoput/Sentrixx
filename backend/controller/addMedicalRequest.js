@@ -92,123 +92,225 @@ const receiptHTML = `
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Laboratory Test Receipt</title>
-    <style>
-        body {
-            font-family: 'Courier New', monospace;
-            max-width: 500px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: white;
+   <style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        max-width: 520px;
+        margin: 0 auto;
+        padding: 24px;
+        background-color: #ffffff;
+        color: #111111;
+        line-height: 1.4;
+    }
+    
+    .receipt {
+        padding: 0;
+        background-color: white;
+    }
+    
+    .header {
+        text-align: center;
+        padding-bottom: 24px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid #000000;
+    }
+    
+    .header h1 {
+        margin: 0 0 8px 0;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    
+    .header h2 {
+        margin: 4px 0;
+        font-size: 12px;
+        font-weight: 400;
+        color: #666666;
+        letter-spacing: 0.3px;
+    }
+    
+    .receipt-info {
+        margin-bottom: 24px;
+        font-size: 13px;
+    }
+    
+    .receipt-info div {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .patient-details {
+        padding: 16px;
+        margin: 24px 0;
+        border: 1px solid #e0e0e0;
+        background-color: #fafafa;
+    }
+    
+    .patient-details h3 {
+        margin: 0 0 12px 0;
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #333333;
+    }
+    
+    .patient-details div {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 13px;
+    }
+    
+    .test-details {
+        margin: 24px 0;
+    }
+    
+    .test-details h3 {
+        margin: 0 0 12px 0;
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #333333;
+    }
+    
+    .test-details table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+    }
+    
+    .test-details th {
+        text-align: left;
+        padding: 10px 8px;
+        font-weight: 500;
+        border-bottom: 2px solid #000000;
+        color: #333333;
+    }
+    
+    .test-details td {
+        padding: 10px 8px;
+        border-bottom: 1px solid #f0f0f0;
+        color: #555555;
+    }
+    
+    .instructions {
+        margin: 24px 0;
+        padding: 16px;
+        border: 1px solid #e0e0e0;
+        background-color: #f9f9f9;
+    }
+    
+    .instructions h3 {
+        margin: 0 0 8px 0;
+        font-size: 14px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #333333;
+    }
+    
+    .instructions p {
+        margin: 8px 0;
+        font-size: 13px;
+        color: #555555;
+    }
+    
+    .footer {
+        text-align: center;
+        margin-top: 32px;
+        padding-top: 24px;
+        border-top: 1px solid #000000;
+        font-size: 11px;
+        color: #777777;
+        letter-spacing: 0.5px;
+    }
+    
+    .important {
+        font-weight: 600;
+        color: #000000;
+    }
+    
+    .barcode {
+        text-align: center;
+        margin: 32px 0;
+        padding: 20px 0;
+        font-family: 'Libre Barcode 128', cursive;
+        font-size: 48px;
+        color: #000000;
+        border-top: 1px solid #f0f0f0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .timestamp {
+        text-align: right;
+        font-size: 11px;
+        color: #888888;
+        margin-bottom: 16px;
+        letter-spacing: 0.5px;
+    }
+    
+    @media print {
+        body { 
+            padding: 0; 
+            max-width: 100%;
         }
-        .receipt {
-            border: 2px solid #000;
-            padding: 20px;
-            background-color: white;
+        .no-print { 
+            display: none; 
         }
-        .header {
-            text-align: center;
-            border-bottom: 2px dashed #000;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
+        .receipt { 
+            border: none; 
         }
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
-            font-weight: bold;
-        }
-        .header h2 {
-            margin: 5px 0;
-            font-size: 16px;
-            font-weight: normal;
-        }
-        .receipt-info {
-            margin-bottom: 20px;
-        }
-        .receipt-info div {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-        }
-        .patient-details {
-            background-color: #f5f5f5;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 5px;
-        }
-        .patient-details h3 {
-            margin-top: 0;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 5px;
-        }
-        .test-details {
-            margin: 20px 0;
-        }
-        .test-details table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .test-details th {
-            text-align: left;
-            padding: 8px;
-            background-color: #f0f0f0;
-            border-bottom: 1px solid #ccc;
-        }
-        .test-details td {
-            padding: 8px;
-            border-bottom: 1px solid #eee;
+        .print-button { 
+            display: none; 
         }
         .instructions {
-            margin: 20px 0;
-            padding: 15px;
-            background-color: #fff8e1;
-            border-left: 4px solid #ffc107;
+            page-break-inside: avoid;
         }
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 2px dashed #000;
-            font-size: 12px;
-            color: #666;
-        }
-        .important {
-            color: #d32f2f;
-            font-weight: bold;
-        }
-        .barcode {
-            text-align: center;
-            margin: 20px 0;
-            font-family: 'Libre Barcode 128', cursive;
-            font-size: 40px;
-        }
-        .timestamp {
-            text-align: right;
-            font-size: 12px;
-            color: #666;
-            margin-bottom: 10px;
-        }
-        @media print {
-            body { padding: 0; }
-            .no-print { display: none; }
-            .receipt { border: none; }
-        }
-        .print-button {
-            text-align: center;
-            margin-top: 20px;
-        }
-        button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-    </style>
+    }
+    
+    .print-button {
+        text-align: center;
+        margin-top: 24px;
+    }
+    
+    button {
+        background-color: #000000;
+        color: white;
+        padding: 10px 24px;
+        border: 1px solid #000000;
+        border-radius: 2px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        transition: all 0.2s ease;
+    }
+    
+    button:hover {
+        background-color: #333333;
+        border-color: #333333;
+    }
+    
+    button.print-close {
+        background-color: #ffffff;
+        color: #000000;
+        margin-left: 12px;
+        border: 1px solid #cccccc;
+    }
+    
+    button.print-close:hover {
+        background-color: #f5f5f5;
+        border-color: #999999;
+    }
+</style>
     <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -216,9 +318,9 @@ const receiptHTML = `
         <div class="timestamp">Generated: ${formattedDateForDisplay}</div>
         
         <div class="header">
-            <h1>MEDICAL LABORATORY CENTER</h1>
-            <h2>123 Health Street, Medical City</h2>
-            <h2>Tel: (123) 456-7890 | Email: lab@medicalcenter.com</h2>
+            <h1>Sentrix</h1>
+            <h2>Pasig City</h2>
+            <h2>Tel: (123) 456-7890 | Email: valdez_johnpaul@plpasig.edu.ph</h2>
         </div>
 
         <div class="receipt-info">

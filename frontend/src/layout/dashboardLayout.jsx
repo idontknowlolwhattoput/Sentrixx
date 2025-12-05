@@ -22,6 +22,7 @@ import PatientDetails from "../components/Dashboard/test"
 import QRScanner from "../QrScanner"
 import DoctorAnalyticsDashboard from "../components/Employee/DoctorAnalyticsQueue"
 import LabTechnicianDashboard from "../components/Laboratory/labTechnicianDashboard"
+import HospitalAdmittanceSystem from "../admit"
 
 export default function DashboardLayout() {
     const [isDropdown, setDropDown] = useState(false)
@@ -86,6 +87,8 @@ export default function DashboardLayout() {
                 return <QRScanner />
             case "Laboratory":
                 return <LabTechnicianDashboard />
+            case "Admit":
+                return <HospitalAdmittanceSystem/>
             default:
                 return <DashboardHome />
         }

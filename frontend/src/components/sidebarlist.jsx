@@ -22,7 +22,8 @@ export default function SidebarList() {
     "Billing Statements": <ShoppingCart size={18} />,
     "Doctor Analytic/Appointment": <Users size={18} />,
     "Appointment Scan": <Users size={18} />,
-    "Laboratory": <Users size={18} />
+    "Laboratory": <Users size={18} />,
+    "Admit": <Users size={18} />
   };
 
   const rolePermissions = {
@@ -36,7 +37,8 @@ export default function SidebarList() {
       "Billing Statements",
       "Doctor Analytic/Appointment",
       "Appointment Scan",
-      "Laboratory"
+      "Laboratory",
+      "Admit"
     ],
     surgeon: [
       "Dashboard", 
@@ -67,10 +69,7 @@ export default function SidebarList() {
       "Register Patient"
     ],
     receptionist: [
-      "Dashboard", 
-      "Patient List", 
-      "Register Patient", 
-      "Appointments"
+      ""
     ],
     medtech: [
         "Laboratory"

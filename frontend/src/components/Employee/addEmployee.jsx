@@ -3,8 +3,8 @@ import axios from "axios";
 
 import { ModalContext } from "../../context/ModalProvider";
 
-import ErrorModal from "../modals/errorModal";
 import SuccessModal from "../modals/successModal";
+
 
 export default function AddEmployee() {
   const [isModalOpen, setModalOpen] = useContext(ModalContext);

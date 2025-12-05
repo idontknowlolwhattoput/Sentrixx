@@ -20,6 +20,8 @@ import QRScanner from './QrScanner'
 import DoctorAnalyticsQueue from './components/Employee/DoctorAnalyticsQueue'
 import PatientDetails from './components/Dashboard/test'
 import LabTechnicianDashboard from './components/Laboratory/labTechnicianDashboard'
+import HospitalAdmittanceSystem from './admit'
+
 
 function App() {
 return (
@@ -27,6 +29,7 @@ return (
      <ContextProvider>
        <BrowserRouter>
          <Routes>
+           <Route path="/admit" element={<HospitalAdmittanceSystem />} />
            <Route path="/" element={<Home />}/>
            <Route path="/signin" element={<Signin />}/>
            <Route path="/patient-registration" element={<PatientRegistration />}/>

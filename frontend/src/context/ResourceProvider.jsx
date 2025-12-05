@@ -15,6 +15,8 @@ export default function ResourceProvider({ children }) {
         { item: "Doctor Analytic/Appointment", icon: "Users" },
         { item: "Appointment Scan", icon: "Users" },
         { item: "Laboratory", icon: "Users" },
+        { item: "Admit", icon: "Users" },
+        
       ],
     },
     {

@@ -14,7 +14,6 @@ const DoctorAnalyticsDashboard = () => {
   const [currentPatientId, setCurrentPatientId] = useState(null);
   const [currentAppointmentCode, setCurrentAppointmentCode] = useState(null);
 
-  // Use a ref to track if component is mounted
   const isMounted = useRef(true);
 
   useEffect(() => {

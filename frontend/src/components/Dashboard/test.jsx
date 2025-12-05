@@ -207,7 +207,7 @@ const PatientDetails = ({ patientId }) => {
       console.log('Patient ID:', patientData.patient_id);
       console.log('Data being sent:', consultationData);
       
-      // IMPORTANT: Your route is /api/add-consultations (based on your route file)
+  
       const response = await axios.post(
         'http://localhost:5000/patient/consultation/add-consultations',
         consultationData,
