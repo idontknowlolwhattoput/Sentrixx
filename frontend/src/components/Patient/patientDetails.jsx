@@ -66,7 +66,8 @@ export default function PatientDetails({ patientId, onBack }) {
     { id: 'contacts', label: 'CONTACTS DETAILS', icon: Users },
     { id: 'allergies', label: 'ALLERGIES DETAILS', icon: AlertTriangle },
     { id: 'visits', label: 'VISITS', icon: FileText },
-    { id: 'laboratory', label: 'LABORATORY TESTS', icon: FlaskRound }, // Changed to FlaskRound
+    { id: 'laboratory', label: 'LABORATORY TESTS', icon: FlaskRound }, 
+    { id: 'admittance', label: 'ADMITTANCE HISTORY', icon: DoorClosed },
   ];
 
   if (loading) {
@@ -180,6 +181,8 @@ export default function PatientDetails({ patientId, onBack }) {
         return <VisitDetails patient={patient} visits={visits} formatDate={formatDate} onAddVisit={() => setShowVisitModal(true)} fetchVisits={fetchVisits} />;
       case 'laboratory':
         return <LaboratoryDetails patientId={patientId} patientName={getFullName()} formatDate={formatDate} formatDateTime={formatDateTime} />;
+      case 'admittance': // Added this case
+        return <AdmittanceHistory patientId={patientId} patientName={getFullName()} formatDate={formatDate} formatDateTime={formatDateTime} />;
       default:
         return <PersonalDetails patient={patient} getPersonalData={getPersonalData} calculateAge={calculateAge} formatDate={formatDate} />;
     }
@@ -1838,6 +1841,9 @@ function InfoCard({ icon: Icon, title, items }) {
   );
 }
 
+// Move these components OUTSIDE the VisitDetailModal function
+// Add them right after the VisitDetailModal function ends
+
 // Visit Detail Modal (keep existing but ensure it's included)
 function VisitDetailModal({ visit, onClose, formatDate }) {
   return (
@@ -1899,6 +1905,463 @@ function VisitDetailModal({ visit, onClose, formatDate }) {
               Close
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ADMITTANCE HISTORY COMPONENT - MOVED HERE
+function AdmittanceHistory({ patientId, patientName, formatDate, formatDateTime }) {
+  const [admissions, setAdmissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedAdmission, setSelectedAdmission] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+  useEffect(() => {
+    if (patientId) {
+      fetchAdmissions();
+    }
+  }, [patientId]);
+
+  const fetchAdmissions = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`http://localhost:5000/api/patients/${patientId}/admissions`);
+      console.log('Admissions API Response:', response.data);
+      
+      if (response.data.success) {
+        setAdmissions(response.data.admissions || []);
+      } else {
+        setAdmissions([]);
+      }
+    } catch (error) {
+      console.error('Error fetching admissions:', error);
+      setAdmissions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getTriageBadge = (category) => {
+    switch (category?.toLowerCase()) {
+      case 'resuscitation':
+        return <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full border border-red-200">Resuscitation</span>;
+      case 'emergency':
+        return <span className="px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded-full border border-orange-200">Emergency</span>;
+      case 'urgent':
+        return <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full border border-yellow-200">Urgent</span>;
+      case 'semi-urgent':
+        return <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full border border-blue-200">Semi-urgent</span>;
+      case 'non-urgent':
+        return <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full border border-green-200">Non-urgent</span>;
+      default:
+        return <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded-full border border-gray-200">{category || 'Unknown'}</span>;
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'admitted':
+        return <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full border border-blue-200">Admitted</span>;
+      case 'discharged':
+        return <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full border border-green-200">Discharged</span>;
+      case 'transferred':
+        return <span className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full border border-purple-200">Transferred</span>;
+      default:
+        return <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded-full border border-gray-200">{status || 'Unknown'}</span>;
+    }
+  };
+
+  const handleViewDetails = (admission) => {
+    setSelectedAdmission(admission);
+    setShowModal(true);
+  };
+
+  const handleRefresh = async () => {
+    await fetchAdmissions();
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xl font-semibold text-gray-900">Admittance History</h3>
+          <p className="text-sm text-gray-600 mt-1">Hospital admission records for {patientName}</p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="flex items-center space-x-2 px-4 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 text-gray-700"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading admittance history...</p>
+        </div>
+      ) : admissions.length > 0 ? (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                    Admission Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                    Triage
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                    Ward/Bed
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider border-r border-gray-200">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {admissions.map((admission) => (
+                  <tr key={admission.admission_id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                      <div className="text-sm font-medium text-gray-900">
+                        {formatDate ? formatDate(admission.admission_date) : new Date(admission.admission_date).toLocaleDateString()}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {admission.admission_time}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                      <div className="text-sm text-gray-900 capitalize">
+                        {admission.admission_type || 'N/A'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                      {getTriageBadge(admission.triage_category)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                      <div className="text-sm text-gray-900">
+                        {admission.ward_id ? `${admission.ward_id} Ward` : 'N/A'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        Bed #{admission.bed_number || 'N/A'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap border-r border-gray-200">
+                      {getStatusBadge(admission.admission_status)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => handleViewDetails(admission)}
+                        className="flex items-center space-x-1 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>View Details</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="text-center py-16 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg bg-white">
+          <DoorClosed className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <h4 className="text-lg font-medium text-gray-900 mb-2">No Admission Records</h4>
+          <p className="text-gray-600">No hospital admission history available for this patient.</p>
+        </div>
+      )}
+
+      {/* Admission Details Modal */}
+      {showModal && selectedAdmission && (
+        <AdmissionDetailsModal
+          admission={selectedAdmission}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedAdmission(null);
+          }}
+          formatDate={formatDate}
+          formatDateTime={formatDateTime}
+        />
+      )}
+    </div>
+  );
+}
+
+// Admission Details Modal Component
+function AdmissionDetailsModal({ admission, onClose, formatDate, formatDateTime }) {
+  const getTriageBadge = (category) => {
+    switch (category?.toLowerCase()) {
+      case 'resuscitation':
+        return <span className="px-3 py-1 text-sm bg-red-100 text-red-800 rounded-full border border-red-200 font-medium">Resuscitation</span>;
+      case 'emergency':
+        return <span className="px-3 py-1 text-sm bg-orange-100 text-orange-800 rounded-full border border-orange-200 font-medium">Emergency</span>;
+      case 'urgent':
+        return <span className="px-3 py-1 text-sm bg-yellow-100 text-yellow-800 rounded-full border border-yellow-200 font-medium">Urgent</span>;
+      case 'semi-urgent':
+        return <span className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-full border border-blue-200 font-medium">Semi-urgent</span>;
+      case 'non-urgent':
+        return <span className="px-3 py-1 text-sm bg-green-100 text-green-800 rounded-full border border-green-200 font-medium">Non-urgent</span>;
+      default:
+        return <span className="px-3 py-1 text-sm bg-gray-100 text-gray-800 rounded-full border border-gray-200 font-medium">{category || 'Unknown'}</span>;
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'admitted':
+        return <span className="px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-full border border-blue-200 font-medium">Admitted</span>;
+      case 'discharged':
+        return <span className="px-3 py-1 text-sm bg-green-100 text-green-800 rounded-full border border-green-200 font-medium">Discharged</span>;
+      case 'transferred':
+        return <span className="px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-full border border-purple-200 font-medium">Transferred</span>;
+      default:
+        return <span className="px-3 py-1 text-sm bg-gray-100 text-gray-800 rounded-full border border-gray-200 font-medium">{status || 'Unknown'}</span>;
+    }
+  };
+
+  const getFallRiskBadge = (score) => {
+    switch (score?.toLowerCase()) {
+      case 'high':
+        return <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded border border-red-200">High Risk</span>;
+      case 'moderate':
+        return <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded border border-yellow-200">Moderate Risk</span>;
+      case 'low':
+        return <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded border border-green-200">Low Risk</span>;
+      default:
+        return <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded border border-gray-200">{score || 'Unknown'}</span>;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div 
+        className="relative w-full max-w-4xl bg-white rounded-lg border border-gray-200 shadow-lg max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 z-10">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Admission Details</h2>
+              <div className="flex items-center space-x-4 mt-2">
+                {getStatusBadge(admission.admission_status)}
+                {getTriageBadge(admission.triage_category)}
+                <span className="text-sm text-gray-500">
+                  Admission ID: {admission.admission_id}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Admission Information */}
+        <div className="p-6">
+          {/* Admission Overview */}
+          <div className="grid grid-cols-2 gap-6 mb-8">
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-medium text-gray-900 mb-3">Admission Information</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Admission Date:</span>
+                  <span className="font-medium">
+                    {formatDate ? formatDate(admission.admission_date) : new Date(admission.admission_date).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Admission Time:</span>
+                  <span className="font-medium">{admission.admission_time}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Type:</span>
+                  <span className="font-medium capitalize">{admission.admission_type}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Mode of Arrival:</span>
+                  <span className="font-medium capitalize">{admission.mode_of_arrival || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="font-medium text-gray-900 mb-3">Ward Assignment</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Ward:</span>
+                  <span className="font-medium">
+                    {admission.ward_id ? `${admission.ward_id} Ward` : 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Bed Number:</span>
+                  <span className="font-medium">#{admission.bed_number || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Insurance:</span>
+                  <span className="font-medium">
+                    {admission.insurance_provider || 'None'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Clinical Assessment */}
+          <div className="mb-6">
+            <h3 className="font-medium text-gray-900 mb-3">Clinical Assessment</h3>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <span className="text-gray-600">Chief Complaint:</span>
+                  <p className="font-medium mt-1">{admission.chief_complaint || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Diagnosis:</span>
+                  <p className="font-medium mt-1">{admission.patient_diagnosis || 'N/A'}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <span className="text-gray-600">Pain Score:</span>
+                  <div className="flex items-center mt-1">
+                    <span className="text-lg font-bold text-red-600">
+                      {admission.pain_score !== null ? admission.pain_score : 'N/A'}
+                    </span>
+                    <span className="text-sm text-gray-500 ml-1">/10</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Pain Location:</span>
+                  <p className="font-medium mt-1">{admission.pain_location || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Fall Risk:</span>
+                  <div className="mt-1">
+                    {getFallRiskBadge(admission.fall_risk_score)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Patient Status */}
+          <div className="mb-6">
+            <h3 className="font-medium text-gray-900 mb-3">Patient Status</h3>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <span className="text-gray-600">General Appearance:</span>
+                  <p className="font-medium mt-1 capitalize">
+                    {admission.general_appearance || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Mobility Status:</span>
+                  <p className="font-medium mt-1 capitalize">
+                    {admission.mobility_status || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Special Needs:</span>
+                  <p className="font-medium mt-1">{admission.special_needs || 'None'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Care Orders */}
+          <div className="mb-6">
+            <h3 className="font-medium text-gray-900 mb-3">Care Orders</h3>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <span className="text-gray-600">Dietary Orders:</span>
+                  <p className="font-medium mt-1 capitalize">
+                    {admission.dietary_orders || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Activity Orders:</span>
+                  <p className="font-medium mt-1 capitalize">
+                    {admission.activity_orders || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-600">Isolation Precautions:</span>
+                  <p className="font-medium mt-1 capitalize">
+                    {admission.isolation_precautions || 'None'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Discharge Information (if applicable) */}
+          {admission.discharge_date && (
+            <div className="mb-6">
+              <h3 className="font-medium text-gray-900 mb-3">Discharge Information</h3>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-gray-600">Discharge Date:</span>
+                    <p className="font-medium mt-1">
+                      {formatDate ? formatDate(admission.discharge_date) : new Date(admission.discharge_date).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Discharge Time:</span>
+                    <p className="font-medium mt-1">{admission.discharge_time || 'N/A'}</p>
+                  </div>
+                </div>
+                {admission.discharge_summary && (
+                  <div className="mt-4">
+                    <span className="text-gray-600">Discharge Summary:</span>
+                    <p className="font-medium mt-1 whitespace-pre-wrap">
+                      {admission.discharge_summary}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Timestamps */}
+          <div className="text-sm text-gray-500 pt-4 border-t border-gray-200">
+            <div className="flex justify-between">
+              <span>Created: {formatDateTime ? formatDateTime(admission.created_at) : new Date(admission.created_at).toLocaleString()}</span>
+              <span>Last Updated: {formatDateTime ? formatDateTime(admission.updated_at) : new Date(admission.updated_at).toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 flex justify-end z-10">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm font-medium"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
