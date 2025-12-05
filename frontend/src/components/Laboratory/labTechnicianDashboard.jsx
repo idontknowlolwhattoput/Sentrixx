@@ -341,7 +341,6 @@ export default function LabTechnicianDashboard() {
           </div>
         </div>
 
-        {/* Content based on position and active tab */}
         {loadingTests ? (
           <div className="flex justify-center items-center h-64">
             <div className="text-center">
@@ -367,7 +366,7 @@ export default function LabTechnicianDashboard() {
   );
 }
 
-// X-Ray Dashboard Component - Updated with admin capabilities
+
 function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -375,10 +374,10 @@ function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
   const [updatingStatus, setUpdatingStatus] = useState({});
   const [testImages, setTestImages] = useState({});
 
-  // Function to fetch images for a specific test
+
   const fetchTestImages = async (recordNo) => {
     try {
-      // Mock image data - replace with actual API call
+
       const mockImages = [
         { 
           id: 1, 
@@ -471,7 +470,7 @@ function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
 
   return (
     <div className="space-y-6">
-      {/* Statistics */}
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard title="Total Today" value={stats.total} icon={ImageIcon} color="bg-gray-100" textColor="text-gray-700" />
         <StatCard title="Pending" value={stats.pending} icon={Clock} color="bg-gray-100" textColor="text-gray-700" />
@@ -479,7 +478,6 @@ function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
         <StatCard title="Completed" value={stats.completed} icon={CheckCircle} color="bg-gray-100" textColor="text-gray-700" />
       </div>
 
-      {/* Admin Info Banner */}
       {isAdmin && (
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
           <div className="flex items-center">
@@ -492,7 +490,6 @@ function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
         </div>
       )}
 
-      {/* Test List */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">

@@ -462,6 +462,7 @@ export const getAllXRayTests = (req, res) => {
     plt.special_instruction, 
     plt.additional_notes, 
     plt.lab_test_code, 
+    plt.status,
     plt.date_requested
 FROM patient_laboratory_test plt
 INNER JOIN patient_info pi

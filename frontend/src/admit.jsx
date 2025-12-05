@@ -352,7 +352,7 @@ const HospitalAdmittanceSystem = () => {
     const originalPatient = apiPatients.find(p => p.patient_id === selectedBed.patient.id) || 
                            availablePatients.find(p => p.id === selectedBed.patient.id);
     
-    // Add patient back to available list with basic info
+
     const patientToAdd = {
       id: selectedBed.patient.id,
       name: selectedBed.patient.name,
@@ -366,7 +366,7 @@ const HospitalAdmittanceSystem = () => {
     
     setAvailablePatients([...availablePatients, patientToAdd]);
 
-    // Update the wards
+
     const updatedWards = wards.map(ward => {
       if (ward.id === selectedWard) {
         const updatedBeds = ward.beds.map(b => {
