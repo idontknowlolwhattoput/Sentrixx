@@ -52,8 +52,8 @@ export default function ManageEmployee() {
       
       const response = await axios.get(`http://localhost:5000/time/timesheet/employee/${employeeId}`, {
         params: {
-          start_date: startDate.toISOString().split('T')[0],
-          end_date: endDate.toISOString().split('T')[0]
+          start_date: startDate.toLocaleDateString('en-CA'),
+          end_date: endDate.toLocaleDateString('en-CA')
         }
       });
 
@@ -453,7 +453,7 @@ export default function ManageEmployee() {
       {showTimeShift && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div 
-            className="relative w-11/12 max-w-6xl max-h-[90vh] bg-white rounded-lg border border-gray-200 overflow-hidden"
+            className="relative w-11/12 max-w-6xl max-h-[90vh] bg-white rounded-lg border border-gray-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
