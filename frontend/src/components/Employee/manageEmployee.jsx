@@ -4,6 +4,7 @@ import { ModalContext } from "../../context/ModalProvider";
 import axios from "axios";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import usePDF from "../../usePdf";
 
 export default function ManageEmployee() {
   const [employees, setEmployees] = useState([]);
@@ -18,6 +19,7 @@ export default function ManageEmployee() {
   const [selectedTimeSlots, setSelectedTimeSlots] = useState([]);
   const [existingTimesheets, setExistingTimesheets] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const { ref, generatePDF } = usePDF();
 
   // Time shift data
   const timeSlots = [
@@ -251,13 +253,19 @@ export default function ManageEmployee() {
               >
                 Add New Employee
               </button>
+              <button
+                className="border-black text-black text-sm px-5 py-2 rounded-md hover:bg-black hover:text-white transition-colors border cursor-pointer"
+                onClick={() => generatePDF()}
+              >
+                Export to PDF
+              </button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Employee Table */}
-      <div className="max-w-full mx-auto px-6 py-8">
+      <div ref={ref} className="max-w-full mx-auto px-6 py-8">
         <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -267,7 +275,7 @@ export default function ManageEmployee() {
                 <th className="px-6 py-4 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">Email</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                 <th className="px-6 py-4 text-left text-sm font-medium text-gray-500 uppercase tracking-wider">Employee ID</th>
-                <th className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="hide px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -286,7 +294,7 @@ export default function ManageEmployee() {
                   <td className="px-6 py-4 text-sm text-gray-900">{emp.email}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">{emp.phone}</td>
                   <td className="px-6 py-4 text-sm text-gray-900 font-mono">{emp.employee_id}</td>
-                  <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                  <td className="hide px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
                     <button
                       className="text-gray-600 hover:text-gray-900 mr-3 text-sm font-medium"
                       onClick={() => handleViewEmployee(emp)}
