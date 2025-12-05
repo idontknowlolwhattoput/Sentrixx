@@ -15,6 +15,7 @@ export default function LabTechnicianDashboard() {
   const [cbcTests, setCbcTests] = useState([]);
   const [loadingTests, setLoadingTests] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('xray'); // 'xray' or 'cbc'
 
   useEffect(() => {
     // Get user position from localStorage
@@ -26,9 +27,14 @@ export default function LabTechnicianDashboard() {
   const normalizedPosition = userPosition?.toLowerCase();
   const isRadiologist = normalizedPosition === 'radiologist';
   const isMedTech = normalizedPosition === 'medtech';
-  const isAdmin = normalizedPosition = 'admin';
+  const isAdmin = normalizedPosition === 'admin';
+  
+  // Admin can choose which dashboard to view, others are fixed
+  const showXrayTab = isRadiologist || isAdmin;
+  const showCbcTab = isMedTech || isAdmin;
+  const canChooseDashboard = isAdmin; // Admin can switch between tabs
 
-  // Fetch tests based on user position
+  // Fetch tests based on user position and active tab
   useEffect(() => {
     const fetchTests = async () => {
       if (!normalizedPosition) return;
@@ -37,12 +43,31 @@ export default function LabTechnicianDashboard() {
       setError(null);
 
       try {
-        if (isRadiologist) {
+        // If user is admin and can see both, fetch both based on active tab
+        // If user is radiologist or medtech, fetch only their respective tests
+        if (isAdmin) {
+          // Admin: fetch both but only show based on active tab
+          if (activeTab === 'xray' || activeTab === 'all') {
+            const xrayResponse = await axios.get(`${API_BASE_URL}/lab/xray`);
+            if (xrayResponse.data.success) {
+              setXrayTests(xrayResponse.data.tests || []);
+            }
+          }
+          
+          if (activeTab === 'cbc' || activeTab === 'all') {
+            const cbcResponse = await axios.get(`${API_BASE_URL}/lab/cbc`);
+            if (cbcResponse.data.success) {
+              setCbcTests(cbcResponse.data.tests || []);
+            }
+          }
+        } else if (isRadiologist) {
+          // Radiologist: only fetch X-ray tests
           const response = await axios.get(`${API_BASE_URL}/lab/xray`);
           if (response.data.success) {
             setXrayTests(response.data.tests || []);
           }
         } else if (isMedTech) {
+          // MedTech: only fetch CBC tests
           const response = await axios.get(`${API_BASE_URL}/lab/cbc`);
           if (response.data.success) {
             setCbcTests(response.data.tests || []);
@@ -57,14 +82,28 @@ export default function LabTechnicianDashboard() {
     };
 
     fetchTests();
-  }, [normalizedPosition, isRadiologist, isMedTech]);
+  }, [normalizedPosition, isRadiologist, isMedTech, isAdmin, activeTab]);
 
   const refreshTests = async () => {
     setLoadingTests(true);
     setError(null);
     
     try {
-      if (isRadiologist) {
+      if (isAdmin) {
+        // Refresh both for admin
+        if (showXrayTab) {
+          const xrayResponse = await axios.get(`${API_BASE_URL}/lab/xray`);
+          if (xrayResponse.data.success) {
+            setXrayTests(xrayResponse.data.tests || []);
+          }
+        }
+        if (showCbcTab) {
+          const cbcResponse = await axios.get(`${API_BASE_URL}/lab/cbc`);
+          if (cbcResponse.data.success) {
+            setCbcTests(cbcResponse.data.tests || []);
+          }
+        }
+      } else if (isRadiologist) {
         const response = await axios.get(`${API_BASE_URL}/lab/xray`);
         if (response.data.success) {
           setXrayTests(response.data.tests || []);
@@ -123,12 +162,56 @@ export default function LabTechnicianDashboard() {
           <p className="text-gray-600 mb-4">
             You don't have permission to access the laboratory dashboard.
           </p>
-          <p className="text-sm text-gray-500">Required positions: Radiologist or MedTech</p>
+          <p className="text-sm text-gray-500">Required positions: Radiologist, MedTech, or Admin</p>
           <p className="text-xs text-gray-400 mt-2">Current position: {userPosition || 'Not set'}</p>
         </div>
       </div>
     );
   }
+
+  // Determine dashboard title based on user position and active tab
+  const getDashboardTitle = () => {
+    if (isAdmin) {
+      return activeTab === 'xray' ? 'Radiology Dashboard (Admin)' : 
+             activeTab === 'cbc' ? 'MedTech Laboratory (Admin)' : 
+             'Laboratory Dashboard (Admin)';
+    } else if (isRadiologist) {
+      return 'Radiology Dashboard';
+    } else if (isMedTech) {
+      return 'MedTech Laboratory';
+    }
+    return 'Laboratory Dashboard';
+  };
+
+  // Determine department/subtitle
+  const getDashboardSubtitle = () => {
+    if (isAdmin) {
+      return activeTab === 'xray' ? 'Medical Imaging Department - Admin View' : 
+             activeTab === 'cbc' ? 'Clinical Laboratory - Admin View' : 
+             'Laboratory Management - Admin View';
+    } else if (isRadiologist) {
+      return 'Medical Imaging Department';
+    } else if (isMedTech) {
+      return 'Clinical Laboratory';
+    }
+    return 'Laboratory';
+  };
+
+  // Determine role display name
+  const getRoleDisplayName = () => {
+    if (isAdmin) return 'Administrator';
+    if (isRadiologist) return 'Radiologist';
+    if (isMedTech) return 'Medical Technologist';
+    return userPosition;
+  };
+
+  // Determine role ID
+  const getRoleId = () => {
+    if (isAdmin) return 'ADM-001';
+    if (isRadiologist) return 'RAD-001';
+    if (isMedTech) return 'MT-001';
+    return 'USER-001';
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -138,24 +221,24 @@ export default function LabTechnicianDashboard() {
           <div className="flex justify-between items-center py-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                {isRadiologist ? 'Radiology Dashboard' : 'MedTech Laboratory'}
+                {getDashboardTitle()}
               </h1>
               <div className="flex items-center space-x-2 mt-1">
                 <p className="text-sm text-gray-600">
-                  {isRadiologist ? 'Medical Imaging Department' : 'Clinical Laboratory'}
+                  {getDashboardSubtitle()}
                 </p>
-                <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded-full border border-gray-300">
-                  {userPosition}
+                <span className={`px-2 py-1 text-xs ${isAdmin ? 'bg-purple-100 text-purple-800 border border-purple-300' : 'bg-gray-100 text-gray-800 border border-gray-300'} rounded-full`}>
+                  {getRoleDisplayName()}
                 </span>
               </div>
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
-                  {isRadiologist ? 'Radiologist' : 'Medical Technologist'}
+                  {getRoleDisplayName()}
                 </p>
                 <p className="text-xs text-gray-600">
-                  ID: {isRadiologist ? 'RAD-001' : 'MT-001'}
+                  ID: {getRoleId()}
                 </p>
               </div>
               <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
@@ -163,6 +246,42 @@ export default function LabTechnicianDashboard() {
               </div>
             </div>
           </div>
+          
+          {/* Admin Dashboard Tabs */}
+          {canChooseDashboard && (
+            <div className="flex space-x-1 border-b border-gray-200">
+              {showXrayTab && (
+                <button
+                  onClick={() => setActiveTab('xray')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                    activeTab === 'xray'
+                      ? 'bg-white border border-gray-300 border-b-white text-gray-900'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <ImageIcon className="w-4 h-4" />
+                    <span>Radiology</span>
+                  </div>
+                </button>
+              )}
+              {showCbcTab && (
+                <button
+                  onClick={() => setActiveTab('cbc')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                    activeTab === 'cbc'
+                      ? 'bg-white border border-gray-300 border-b-white text-gray-900'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <Microscope className="w-4 h-4" />
+                    <span>MedTech Lab</span>
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -187,9 +306,9 @@ export default function LabTechnicianDashboard() {
                 <input
                   type="text"
                   placeholder={
-                    isRadiologist 
-                      ? "Search by patient name, ID, or record number..." 
-                      : "Search by patient name, ID, or record number..."
+                    (isAdmin && activeTab === 'xray') || isRadiologist
+                      ? "Search X-ray tests by patient name, ID, or record number..." 
+                      : "Search CBC tests by patient name, ID, or record number..."
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -222,7 +341,7 @@ export default function LabTechnicianDashboard() {
           </div>
         </div>
 
-        {/* Content based on position */}
+        {/* Content based on position and active tab */}
         {loadingTests ? (
           <div className="flex justify-center items-center h-64">
             <div className="text-center">
@@ -230,24 +349,26 @@ export default function LabTechnicianDashboard() {
               <p className="mt-4 text-gray-600">Loading tests...</p>
             </div>
           </div>
-        ) : isRadiologist ? (
+        ) : (isAdmin && activeTab === 'xray') || isRadiologist ? (
           <XRayDashboard 
             tests={filterTests(xrayTests)} 
             refreshTests={refreshTests}
+            isAdmin={isAdmin}
           />
-        ) : (
+        ) : (isAdmin && activeTab === 'cbc') || isMedTech ? (
           <CBCDashboard 
             tests={filterTests(cbcTests)}
             refreshTests={refreshTests}
+            isAdmin={isAdmin}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );
 }
 
-// X-Ray Dashboard Component - Simplified with only required columns
-function XRayDashboard({ tests, refreshTests }) {
+// X-Ray Dashboard Component - Updated with admin capabilities
+function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
   const [selectedImage, setSelectedImage] = useState(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentTest, setCurrentTest] = useState(null);
@@ -358,11 +479,35 @@ function XRayDashboard({ tests, refreshTests }) {
         <StatCard title="Completed" value={stats.completed} icon={CheckCircle} color="bg-gray-100" textColor="text-gray-700" />
       </div>
 
-      {/* Test List - SIMPLIFIED with only required columns */}
+      {/* Admin Info Banner */}
+      {isAdmin && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <Shield className="w-5 h-5 text-purple-600 mr-2" />
+            <p className="text-purple-700 text-sm">
+              <span className="font-medium">Admin View:</span> You are viewing the Radiology dashboard with administrative privileges.
+              You can view all tests but cannot modify them.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Test List */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">X-Ray Imaging Queue</h2>
-          <p className="text-sm text-gray-600 mt-1">Review and interpret medical images</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">X-Ray Imaging Queue</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {isAdmin ? 'Administrative View - Read Only' : 'Review and interpret medical images'}
+              </p>
+            </div>
+            {isAdmin && (
+              <span className="px-3 py-1 text-xs bg-purple-100 text-purple-800 rounded-full border border-purple-300">
+                Read Only Mode
+              </span>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           {tests.length === 0 ? (
@@ -433,7 +578,7 @@ function XRayDashboard({ tests, refreshTests }) {
                         >
                           <Eye className="w-4 h-4 text-gray-600" />
                         </button>
-                        {test.status?.toLowerCase() !== 'completed' && test.status?.toLowerCase() !== 'done' && (
+                        {!isAdmin && test.status?.toLowerCase() !== 'completed' && test.status?.toLowerCase() !== 'done' && (
                           <button
                             onClick={() => handleUpdateStatus(test.record_no, 'completed')}
                             disabled={updatingStatus[test.record_no]}
@@ -441,6 +586,11 @@ function XRayDashboard({ tests, refreshTests }) {
                           >
                             {updatingStatus[test.record_no] ? 'Updating...' : 'Mark Complete'}
                           </button>
+                        )}
+                        {isAdmin && (
+                          <span className="px-3 py-2 text-xs text-gray-500 italic">
+                            View Only
+                          </span>
                         )}
                       </div>
                     </td>
@@ -470,14 +620,15 @@ function XRayDashboard({ tests, refreshTests }) {
               [currentTest.record_no]: images
             }));
           }}
+          isAdmin={isAdmin}
         />
       )}
     </div>
   );
 }
 
-// CBC Dashboard Component
-function CBCDashboard({ tests, refreshTests }) {
+// CBC Dashboard Component - Updated with admin capabilities
+function CBCDashboard({ tests, refreshTests, isAdmin = false }) {
   const [expandedTest, setExpandedTest] = useState(null);
   const [testResults, setTestResults] = useState({});
   const [showResultsModal, setShowResultsModal] = useState(false);
@@ -496,6 +647,11 @@ function CBCDashboard({ tests, refreshTests }) {
   };
 
   const handleUpdateStatus = async (recordNo, newStatus, results = null) => {
+    if (isAdmin) {
+      alert('Administrators cannot modify test results.');
+      return;
+    }
+    
     setUpdatingStatus(prev => ({ ...prev, [recordNo]: true }));
     try {
       const updateData = { status: newStatus };
@@ -516,6 +672,11 @@ function CBCDashboard({ tests, refreshTests }) {
   };
 
   const handleInputChange = (testId, parameter, value) => {
+    if (isAdmin) {
+      alert('Administrators cannot modify test results.');
+      return;
+    }
+    
     setTestResults(prev => ({
       ...prev,
       [testId]: {
@@ -584,11 +745,35 @@ function CBCDashboard({ tests, refreshTests }) {
         <StatCard title="Completed" value={stats.completed} icon={CheckCircle} color="bg-gray-100" textColor="text-gray-700" />
       </div>
 
+      {/* Admin Info Banner */}
+      {isAdmin && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <Shield className="w-5 h-5 text-purple-600 mr-2" />
+            <p className="text-purple-700 text-sm">
+              <span className="font-medium">Admin View:</span> You are viewing the MedTech Laboratory dashboard with administrative privileges.
+              You can view all tests but cannot modify results.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Test List */}
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Complete Blood Count Tests</h2>
-          <p className="text-sm text-gray-600 mt-1">Process blood samples and enter test results</p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Complete Blood Count Tests</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {isAdmin ? 'Administrative View - Read Only' : 'Process blood samples and enter test results'}
+              </p>
+            </div>
+            {isAdmin && (
+              <span className="px-3 py-1 text-xs bg-purple-100 text-purple-800 rounded-full border border-purple-300">
+                Read Only Mode
+              </span>
+            )}
+          </div>
         </div>
         <div className="overflow-x-auto">
           {tests.length === 0 ? (
@@ -656,21 +841,28 @@ function CBCDashboard({ tests, refreshTests }) {
                             </button>
                           ) : (
                             <>
-                              <button
-                                onClick={() => setExpandedTest(expandedTest === test.record_no ? null : test.record_no)}
-                                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                                title="Enter Results"
-                              >
-                                <FileText className="w-4 h-4 text-gray-600" />
-                              </button>
+                              {!isAdmin && (
+                                <button
+                                  onClick={() => setExpandedTest(expandedTest === test.record_no ? null : test.record_no)}
+                                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                  title="Enter Results"
+                                >
+                                  <FileText className="w-4 h-4 text-gray-600" />
+                                </button>
+                              )}
+                              {isAdmin && (
+                                <span className="px-3 py-2 text-xs text-gray-500 italic">
+                                  View Only
+                                </span>
+                              )}
                             </>
                           )}
                         </div>
                       </td>
                     </tr>
 
-                    {/* Expanded Results Input */}
-                    {expandedTest === test.record_no && test.status?.toLowerCase() !== 'completed' && test.status?.toLowerCase() !== 'done' && (
+                    {/* Expanded Results Input - Only for non-admin users */}
+                    {!isAdmin && expandedTest === test.record_no && test.status?.toLowerCase() !== 'completed' && test.status?.toLowerCase() !== 'done' && (
                       <tr>
                         <td colSpan="6" className="px-6 py-4 bg-gray-50 border-t border-gray-200">
                           <div className="max-w-4xl">
@@ -736,6 +928,7 @@ function CBCDashboard({ tests, refreshTests }) {
             setShowResultsModal(false);
             setSelectedTest(null);
           }}
+          isAdmin={isAdmin}
         />
       )}
     </div>
@@ -759,9 +952,8 @@ function StatCard({ title, value, icon: Icon, color, textColor }) {
   );
 }
 
-// Updated Image Modal Component with real images
-// Updated Image Modal Component with working image upload and display
-function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, onStatusUpdate, onImagesUpdate }) {
+// Updated Image Modal Component with admin mode
+function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, onStatusUpdate, onImagesUpdate, isAdmin = false }) {
   const [findings, setFindings] = useState(test.findings || '');
   const [impression, setImpression] = useState(test.impression || '');
   const [saving, setSaving] = useState(false);
@@ -770,8 +962,13 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [imageError, setImageError] = useState(false);
 
-  // Handle file selection for upload
+  // Handle file selection for upload - disabled for admin
   const handleFileSelect = (event) => {
+    if (isAdmin) {
+      alert('Administrators cannot upload images.');
+      return;
+    }
+    
     const file = event.target.files[0];
     if (file) {
       // Validate file type
@@ -797,8 +994,13 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
     }
   };
 
-  // Upload image to API - Fixed version
+  // Upload image to API - disabled for admin
   const handleUploadImage = async () => {
+    if (isAdmin) {
+      alert('Administrators cannot upload images.');
+      return;
+    }
+    
     if (!selectedFile) return;
 
     setUploading(true);
@@ -811,17 +1013,11 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
       const newImage = {
         id: imageId,
         name: selectedFile.name,
-        url: previewUrl, // Use the data URL from FileReader
+        url: previewUrl,
         uploaded_at: new Date().toISOString(),
         size: (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB',
         type: selectedFile.type
       };
-      
-      // For demo - in production you would upload to your API
-      // const formData = new FormData();
-      // formData.append('image', selectedFile);
-      // formData.append('record_no', test.record_no);
-      // const response = await axios.post(`${API_BASE_URL}/lab/xray/${test.record_no}/upload`, formData);
       
       // Add new image to the list
       const updatedImages = [...images, newImage];
@@ -847,8 +1043,13 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
     }
   };
 
-  // Delete image
+  // Delete image - disabled for admin
   const handleDeleteImage = async (imageId) => {
+    if (isAdmin) {
+      alert('Administrators cannot delete images.');
+      return;
+    }
+    
     if (!window.confirm('Are you sure you want to delete this image?')) return;
 
     try {
@@ -872,96 +1073,44 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
     }
   };
 
- const handleSaveFindings = async () => {
-  setSaving(true);
-  try {
-    // Create FormData object
-    const formData = new FormData();
-    
-    // Add findings and impression
-    if (findings) formData.append('findings', findings);
-    if (impression) formData.append('impression', impression);
-    
-    // Add image if available (from uploaded images)
-    if (images && images.length > 0 && images[0].file) {
-      // If we have a file object from upload
-      formData.append('image', images[0].file);
-    } else if (selectedFile) {
-      // If user just uploaded a new file
-      formData.append('image', selectedFile);
-    } else if (images && images.length > 0 && images[0].url) {
-      // If image already exists as a URL, we need to convert it
-      // Note: This requires additional handling if re-uploading is needed
-      console.log('Image already exists, skipping upload');
+  const handleSaveFindings = async () => {
+    if (isAdmin) {
+      alert('Administrators cannot save findings.');
+      return;
     }
     
-    // Send the request
-    const response = await axios.put(
-      `${API_BASE_URL}/lab/xray/${test.record_no}/update`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        // Optional: Add timeout and progress
-        timeout: 30000, // 30 seconds timeout
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          console.log(`Upload progress: ${percentCompleted}%`);
-          // You could add a progress bar here
+    setSaving(true);
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/lab/xray/${test.record_no}/update`,
+        {
+          findings,
+          impression
         }
-      }
-    );
+      );
 
-    if (response.data.success) {
-      // Show success message with details
-      const message = `Results saved successfully!${
-        response.data.image ? 
-          `\nImage: ${response.data.image.filename}` : 
-          '\nNo image uploaded.'
-      }`;
-      alert(message);
-      
-      // Refresh the test list
-      if (onStatusUpdate) {
-        onStatusUpdate();
+      if (response.data.success) {
+        alert('Results saved successfully!');
+        
+        // Refresh the test list
+        if (onStatusUpdate) {
+          onStatusUpdate();
+        }
+        
+        // Close the modal
+        if (onClose) {
+          onClose();
+        }
+      } else {
+        throw new Error(response.data.message || 'Update failed');
       }
-      
-      // Close the modal
-      if (onClose) {
-        onClose();
-      }
-    
-    } else {
-      throw new Error(response.data.message || 'Update failed');
+    } catch (err) {
+      console.error('Error saving findings:', err);
+      alert(`Failed to save results: ${err.message}`);
+    } finally {
+      setSaving(false);
     }
-    
-  } catch (err) {
-    console.error('Error saving findings:', err);
-    
-    // Show more detailed error message
-    let errorMessage = 'Failed to save results';
-    if (err.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      errorMessage = `Server error: ${err.response.data.message || err.response.statusText}`;
-      console.error('Response data:', err.response.data);
-    } else if (err.request) {
-      // The request was made but no response was received
-      errorMessage = 'No response from server. Check your connection.';
-      console.error('Request error:', err.request);
-    } else {
-      // Something happened in setting up the request
-      errorMessage = `Error: ${err.message}`;
-    }
-    
-    alert(errorMessage);
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   // Format date for display
   const formatDate = (dateString) => {
@@ -989,9 +1138,12 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">X-Ray Test Details</h2>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {isAdmin ? 'X-Ray Test Details (Admin View)' : 'X-Ray Test Details'}
+              </h2>
               <p className="text-sm text-gray-600 mt-1">
                 Record #{test.record_no} • Patient #{test.patient_id} • {test.test_name}
+                {isAdmin && ' • Read Only'}
               </p>
             </div>
             <button
@@ -1008,6 +1160,18 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
           {/* Sidebar */}
           <div className="w-64 border-r border-gray-200 bg-gray-50 overflow-y-auto">
             <div className="p-4">
+              {/* Admin Notice */}
+              {isAdmin && (
+                <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div className="flex items-center">
+                    <Shield className="w-4 h-4 text-purple-600 mr-2" />
+                    <p className="text-xs text-purple-700">
+                      Administrative view - Read only
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Test Info */}
               <div className="mb-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Test Information</h3>
@@ -1057,35 +1221,38 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
                 </div>
               )}
 
-              {/* Image Upload Section */}
-              <div className="mb-6">
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">Upload Image</h3>
-                <div className="space-y-3">
-                  <input
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,image/*"
-                    onChange={handleFileSelect}
-                    className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-50 file:text-gray-700 hover:file:bg-gray-100"
-                  />
-                  {previewUrl && (
-                    <div className="mt-2">
-                      <p className="text-xs text-gray-600 mb-1">Preview:</p>
-                      <img 
-                        src={previewUrl} 
-                        alt="Preview" 
-                        className="w-full h-32 object-contain rounded border border-gray-300 bg-white"
-                      />
-                    </div>
-                  )}
-                  <button
-                    onClick={handleUploadImage}
-                    disabled={!selectedFile || uploading}
-                    className="w-full px-4 py-2 text-sm border border-blue-600 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {uploading ? 'Uploading...' : 'Upload Image'}
-                  </button>
+              {/* Image Upload Section - Hidden for admin */}
+              {!isAdmin && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Upload Image</h3>
+                  <div className="space-y-3">
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,image/*"
+                      onChange={handleFileSelect}
+                      disabled={isAdmin}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-50 file:text-gray-700 hover:file:bg-gray-100 disabled:opacity-50"
+                    />
+                    {previewUrl && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-600 mb-1">Preview:</p>
+                        <img 
+                          src={previewUrl} 
+                          alt="Preview" 
+                          className="w-full h-32 object-contain rounded border border-gray-300 bg-white"
+                        />
+                      </div>
+                    )}
+                    <button
+                      onClick={handleUploadImage}
+                      disabled={!selectedFile || uploading || isAdmin}
+                      className="w-full px-4 py-2 text-sm border border-blue-600 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {uploading ? 'Uploading...' : 'Upload Image'}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Image List */}
               <div className="mb-6">
@@ -1121,13 +1288,15 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
                               </div>
                             </div>
                           </button>
-                          <button
-                            onClick={() => handleDeleteImage(image.id)}
-                            className="ml-2 p-1 text-red-600 hover:bg-red-50 rounded"
-                            title="Delete image"
-                          >
-                            ✕
-                          </button>
+                          {!isAdmin && (
+                            <button
+                              onClick={() => handleDeleteImage(image.id)}
+                              className="ml-2 p-1 text-red-600 hover:bg-red-50 rounded"
+                              title="Delete image"
+                            >
+                              ✕
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))
@@ -1141,9 +1310,10 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
                 <textarea
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900"
                   rows="3"
-                  placeholder="Enter your findings..."
+                  placeholder={isAdmin ? "Findings will appear here..." : "Enter your findings..."}
                   value={findings}
-                  onChange={(e) => setFindings(e.target.value)}
+                  onChange={(e) => !isAdmin && setFindings(e.target.value)}
+                  readOnly={isAdmin}
                 />
               </div>
 
@@ -1153,19 +1323,22 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
                 <textarea
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900"
                   rows="3"
-                  placeholder="Enter your impression..."
+                  placeholder={isAdmin ? "Impression will appear here..." : "Enter your impression..."}
                   value={impression}
-                  onChange={(e) => setImpression(e.target.value)}
+                  onChange={(e) => !isAdmin && setImpression(e.target.value)}
+                  readOnly={isAdmin}
                 />
               </div>
 
-              <button
-                onClick={handleSaveFindings}
-                disabled={saving}
-                className="w-full px-4 py-2 text-sm border border-gray-800 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save & Complete Test'}
-              </button>
+              {!isAdmin && (
+                <button
+                  onClick={handleSaveFindings}
+                  disabled={saving}
+                  className="w-full px-4 py-2 text-sm border border-gray-800 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save & Complete Test'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -1196,7 +1369,9 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
                 <div className="text-center">
                   <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                   <p className="text-white text-lg">No images available</p>
-                  <p className="text-gray-400 mt-2">Upload images using the panel on the left</p>
+                  <p className="text-gray-400 mt-2">
+                    {isAdmin ? 'No images have been uploaded for this test' : 'Upload images using the panel on the left'}
+                  </p>
                 </div>
               ) : (
                 <div className="text-center">
@@ -1329,8 +1504,8 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
   );
 }
 
-// Results Modal Component (for CBC results)
-function ResultsModal({ test, onClose }) {
+// Results Modal Component with admin mode
+function ResultsModal({ test, onClose, isAdmin = false }) {
   // Parse results if stored as JSON string
   const results = typeof test.results === 'string' 
     ? JSON.parse(test.results) 
@@ -1372,9 +1547,12 @@ function ResultsModal({ test, onClose }) {
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">CBC Test Results</h2>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {isAdmin ? 'CBC Test Results (Admin View)' : 'CBC Test Results'}
+              </h2>
               <p className="text-sm text-gray-600 mt-1">
                 Record #{test.record_no} • Patient #{test.patient_id}
+                {isAdmin && ' • Read Only'}
               </p>
             </div>
             <button
@@ -1388,6 +1566,18 @@ function ResultsModal({ test, onClose }) {
 
         {/* Content */}
         <div className="p-6">
+          {/* Admin Notice */}
+          {isAdmin && (
+            <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <div className="flex items-center">
+                <Shield className="w-5 h-5 text-purple-600 mr-2" />
+                <p className="text-purple-700 text-sm">
+                  Administrative view - Read only. You cannot modify test results.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Test Info */}
           <div className="grid grid-cols-2 gap-6 mb-8">
             <div className="bg-gray-50 p-4 rounded-lg">
