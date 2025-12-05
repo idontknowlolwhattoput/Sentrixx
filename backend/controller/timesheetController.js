@@ -38,7 +38,7 @@ const timesheetController = {
                 return;
             }
 
-            const mysqlDate = new Date(timesheet_date).toISOString().split("T")[0];
+            const mysqlDate = new Date(timesheet_date).toLocaleDateString('en-CA');
 
             const query = `
                 INSERT INTO employee_timesheet

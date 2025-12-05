@@ -52,8 +52,8 @@ export default function ManageEmployee() {
       
       const response = await axios.get(`http://localhost:5000/time/timesheet/employee/${employeeId}`, {
         params: {
-          start_date: startDate.toISOString().split('T')[0],
-          end_date: endDate.toISOString().split('T')[0]
+          start_date: startDate.toLocaleDateString('en-CA'),
+          end_date: endDate.toLocaleDateString('en-CA')
         }
       });
 
