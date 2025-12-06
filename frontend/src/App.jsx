@@ -21,6 +21,7 @@ import DoctorAnalyticsQueue from './components/Employee/DoctorAnalyticsQueue'
 import PatientDetails from './components/Dashboard/test'
 import LabTechnicianDashboard from './components/Laboratory/labTechnicianDashboard'
 import HospitalAdmittanceSystem from './admit'
+import AnalyticsDashboard from './components/Admin/analytics'
 
 
 function App() {
@@ -34,11 +35,11 @@ return (
            <Route path="/signin" element={<Signin />}/>
            <Route path="/patient-registration" element={<PatientRegistration />}/>
            <Route path="/queue-tv" element={<QueueTVScreen />}/>
-            <Route path="/gh" element={<AddEmployee />}/>
-            <Route path="/doctor/analytics" element={<DoctorAnalyticsQueue />} />
-            <Route path="/testing" element={<PatientDetails />} />
-            <Route path="/laboratory" element={<LabTechnicianDashboard />} />
-
+           <Route path="/gh" element={<AddEmployee />}/>
+           <Route path="/doctor/analytics" element={<DoctorAnalyticsQueue />} />
+           <Route path="/testing" element={<PatientDetails />} />
+           <Route path="/laboratory" element={<LabTechnicianDashboard />} />
+           <Route path="/analytics" element={<AnalyticsDashboard />} />
         
            {/* DASHBOARD TESTING */}
            <Route path="/test" element={<Dashboard />}/>

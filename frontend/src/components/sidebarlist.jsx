@@ -23,28 +23,22 @@ export default function SidebarList() {
     "Doctor Analytic/Appointment": <Users size={18} />,
     "Appointment Scan": <Users size={18} />,
     "Laboratory": <Users size={18} />,
-    "Admit": <Users size={18} />
+    "Admit": <Users size={18} />,
+    "Queue": <Users size={18} />,
+    "Analytics": <Users size={18} />
   };
 
   const rolePermissions = {
     admin: [
-      "Dashboard", 
       "Manage Employee", 
       "Patient List", 
       "Register Patient", 
       "Appointments",
-      "Finance Dashboard",
-      "Billing Statements",
       "Doctor Analytic/Appointment",
       "Appointment Scan",
       "Laboratory",
-      "Admit"
-    ],
-    surgeon: [
-      "Dashboard", 
-      "Patient List", 
-      "Register Patient", 
-      "Appointments",
+      "Admit",
+      "Analytics"
     ],
     "general physician": [
       "Dashboard", 
@@ -57,29 +51,26 @@ export default function SidebarList() {
       "Laboratory"
     ],
     doctor: [
-      "Dashboard", 
+ 
       "Patient List", 
       "Register Patient", 
       "Appointments",
       "Doctor Analytic/Appointment"
     ],
     nurse: [
-      "Dashboard", 
+
       "Patient List", 
-      "Register Patient"
-    ],
-    receptionist: [
-      ""
+      "Register Patient",
+      "Admit"
     ],
     medtech: [
         "Laboratory"
     ],
-    staff: ["Dashboard"],
-    billing: [
-      "Dashboard",
-      "Finance Dashboard",
-      "Billing Statements"
-    ]
+    receptionist: [
+      "Appointment Scan",
+      "Queue"
+    ],
+   
   };
 
   const handleClick = (item) => {

@@ -407,6 +407,7 @@ const receiptHTML = `
 };
 
 // GET laboratory tests by patient ID
+// GET all lab tests by patient ID (including X-Ray specific fields)
 export const getLabTestsByPatientId = (req, res) => {
   const { patient_id } = req.params;
 
@@ -419,17 +420,25 @@ export const getLabTestsByPatientId = (req, res) => {
 
   const query = `
     SELECT 
-        record_no,
-        employee_id,
-        patient_id,
-        test_name,
-        special_instruction,
-        additional_notes,
-        status,
-        date_requested
-    FROM patient_laboratory_test
-    WHERE patient_id = ?
-    ORDER BY date_requested DESC
+      plt.record_no,
+      plt.employee_id,
+      plt.patient_id,
+      plt.test_name,
+      plt.special_instruction,
+      plt.additional_notes,
+      plt.status,
+      plt.lab_test_code,
+      plt.date_requested,
+      plt.findings,
+      plt.impression,
+      plt.primary_image_path,
+      pi.first_name,
+      pi.last_name
+    FROM patient_laboratory_test plt
+    LEFT JOIN patient_info pi 
+      ON plt.patient_id = pi.patient_id
+    WHERE plt.patient_id = ?
+    ORDER BY plt.date_requested DESC
   `;
 
   connection.query(query, [patient_id], (err, results) => {
@@ -463,6 +472,9 @@ export const getAllXRayTests = (req, res) => {
     plt.additional_notes, 
     plt.lab_test_code, 
     plt.status,
+    plt.findings,
+    plt.impression,
+    plt.primary_image_path,
     plt.date_requested
 FROM patient_laboratory_test plt
 INNER JOIN patient_info pi
@@ -568,7 +580,7 @@ export const updateXRayResultsController = (req, res) => {
     }
 
     const { record_no } = req.params;
-    const { findings, impression } = req.body;
+    const { findings, impression, } = req.body;
     
     console.log("Received request:", { record_no, findings, impression });
     console.log("File received:", req.file ? "YES" : "NO");

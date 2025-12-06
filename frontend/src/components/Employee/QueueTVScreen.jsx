@@ -23,7 +23,7 @@ const QueueTVScreen = () => {
       const phrase = `
         Now serving patient ${patient.appointment_code}.
         ${patient.patient_name}.
-        For doctor ${patient.doctor_name}.
+        For ${patient.doctor_name}.
       `;
 
       const speech = new SpeechSynthesisUtterance(phrase);

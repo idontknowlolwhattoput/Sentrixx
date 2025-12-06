@@ -538,3 +538,4 @@ export const formatTimeForDisplay = (time24) => {
   
   return `${hour.toString().padStart(2, '0')}:${minutes} ${ampm}`;
 };
+

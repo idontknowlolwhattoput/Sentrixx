@@ -161,7 +161,7 @@ const DoctorAnalyticsDashboard = () => {
   if (showPatientDetails && currentPatientId) {
     console.log('🎯 Rendering PatientDetails with patientId:', currentPatientId);
     console.log('🎯 Appointment Code for consultation:', currentAppointmentCode);
-    
+    {localStorage.setItem('selected_patient_id', currentPatientId )}
     return (
       <div className="w-full h-full bg-white">
         <div className="border-b border-gray-300 p-4 bg-gray-50">
@@ -198,9 +198,9 @@ const DoctorAnalyticsDashboard = () => {
   }
 
   return (
-    <div className="w-full h-full bg-white text-black p-4">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-4 border-b border-gray-300 pb-3">
+      <div className="w-full h-full bg-white text-black p-4">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-4 border-b border-gray-300 pb-3">
         <div>
           <h1 className="text-xl font-light">Doctor Analytics Dashboard</h1>
           {doctorData && (

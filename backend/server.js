@@ -16,6 +16,8 @@ import scanAppointmentCodeRoute from "./routes/scanAppointmentCodeRoute.js"
 import addConsultation from "./routes/consultationRoute.js"
 import addLabResult from "./routes/addMedicalRequestRoute.js"
 import admissionRoute from "./routes/admissionRoute.js"
+import analyticsRoute from "./routes/analyticsRoute.js"
+
 const app = express();
 const port = 5000;
 
@@ -42,7 +44,7 @@ app.use('/receptionist', scanAppointmentCodeRoute)
 app.use('/patient/consultation', addConsultation)
 app.use('/lab', addLabResult)
 app.use('/api', admissionRoute)
-
+app.use('/api/analytics', analyticsRoute)
 app.listen(port, () => {
   console.log(`🚀 Server running on port ${port}`);
 });

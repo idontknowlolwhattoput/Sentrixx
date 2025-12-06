@@ -27,17 +27,13 @@ export default function AddEmployee() {
   const departmentPositions = {
     "General Medicine": [
       "General Physician",
-      "Pediatrician",
-      "Obstetrician-Gynecologist (OB-GYN)",
+      "Nurse"
     ],
-    Surgery: ["Surgeon", "Orthopedic Doctor"],
     Diagnostics: [
       "Medtech",
       "Radiology",
     ],
-    Specializations: ["Cardiologist", "Neurologist", "Oncologist"],
     Administration: ["Receptionist", "Admin"],
-    Finance: ["Cashier"]
   };
 
   const [filteredPositions, setFilteredPositions] = useState([]);

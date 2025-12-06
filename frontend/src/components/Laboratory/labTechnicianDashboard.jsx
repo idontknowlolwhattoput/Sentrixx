@@ -373,11 +373,10 @@ function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
   const [currentTest, setCurrentTest] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState({});
   const [testImages, setTestImages] = useState({});
-
+  const [imageThumbnails, setImageThumbnails] = useState({});
 
   const fetchTestImages = async (recordNo) => {
     try {
-
       const mockImages = [
         { 
           id: 1, 
@@ -405,6 +404,42 @@ function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
       return [];
     }
   };
+
+  // Load thumbnails for tests with images
+  const loadThumbnails = async (tests) => {
+    const thumbnails = {};
+    
+    tests.forEach(test => {
+      if (test.primary_image_path) {
+        // Create a thumbnail URL from the primary image path
+        thumbnails[test.record_no] = {
+          url: `${API_BASE_URL}/${test.primary_image_path}`,
+          name: 'X-Ray Image',
+          hasImage: true
+        };
+      } else if (test.image_path) {
+        // Alternative field name
+        thumbnails[test.record_no] = {
+          url: `${API_BASE_URL}/${test.image_path}`,
+          name: 'X-Ray Image',
+          hasImage: true
+        };
+      } else {
+        thumbnails[test.record_no] = {
+          hasImage: false,
+          placeholder: 'No Image'
+        };
+      }
+    });
+    
+    setImageThumbnails(thumbnails);
+  };
+
+  useEffect(() => {
+    if (tests.length > 0) {
+      loadThumbnails(tests);
+    }
+  }, [tests]);
 
   const handleUpdateStatus = async (recordNo, newStatus) => {
     setUpdatingStatus(prev => ({ ...prev, [recordNo]: true }));
@@ -515,6 +550,7 @@ function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Image</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Record No.</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Patient Name</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Lab Test Code</th>
@@ -525,74 +561,120 @@ function XRayDashboard({ tests, refreshTests, isAdmin = false }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {tests.map((test) => (
-                  <tr key={test.record_no} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{test.record_no}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">
-                        {test.first_name && test.last_name 
-                          ? `${test.first_name} ${test.last_name}`
-                          : `Patient #${test.patient_id}`}
-                      </div>
-                      {test.patient_id && (
-                        <div className="text-xs text-gray-600 mt-1">
-                          ID: {test.patient_id}
+                {tests.map((test) => {
+                  const thumbnail = imageThumbnails[test.record_no];
+                  const hasImage = thumbnail?.hasImage;
+                  
+                  return (
+                    <tr key={test.record_no} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center">
+                          {hasImage ? (
+                            <div className="relative group">
+                              <div className="w-16 h-16 overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+                                <img
+                                  src={thumbnail.url}
+                                  alt={`X-Ray for ${test.record_no}`}
+                                  className="w-full h-full object-cover hover:scale-110 transition-transform duration-200"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.parentElement.innerHTML = `
+                                      <div class="w-16 h-16 flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+                                        <ImageIcon class="w-6 h-6 text-gray-400" />
+                                      </div>
+                                    `;
+                                  }}
+                                />
+                              </div>
+                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                <Eye className="w-5 h-5 text-white" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="w-16 h-16 flex items-center justify-center bg-gray-100 rounded-lg border border-gray-200">
+                              <ImageIcon className="w-6 h-6 text-gray-400" />
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{test.lab_test_code || 'N/A'}</div>
-                      {test.test_name && test.test_name !== 'X-Ray' && (
-                        <div className="text-xs text-gray-600 mt-1">
-                          {test.test_name}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{test.record_no}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">
+                          {test.first_name && test.last_name 
+                            ? `${test.first_name} ${test.last_name}`
+                            : `Patient #${test.patient_id}`}
                         </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{formatDate(test.date_requested)}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="max-w-xs">
-                        <div className="text-sm text-gray-900">{test.special_instruction || 'None'}</div>
-                        {test.additional_notes && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            Note: {test.additional_notes}
+                        {test.patient_id && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            ID: {test.patient_id}
                           </div>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {getStatusBadge(test.status)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleViewImages(test)}
-                          className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                          title="View Test Details"
-                        >
-                          <Eye className="w-4 h-4 text-gray-600" />
-                        </button>
-                        {!isAdmin && test.status?.toLowerCase() !== 'completed' && test.status?.toLowerCase() !== 'done' && (
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{test.lab_test_code || 'N/A'}</div>
+                        {test.test_name && test.test_name !== 'X-Ray' && (
+                          <div className="text-xs text-gray-600 mt-1">
+                            {test.test_name}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">{formatDate(test.date_requested)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="max-w-xs">
+                          <div className="text-sm text-gray-900">{test.special_instruction || 'None'}</div>
+                          {test.additional_notes && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Note: {test.additional_notes}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {getStatusBadge(test.status)}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex space-x-2">
                           <button
-                            onClick={() => handleUpdateStatus(test.record_no, 'completed')}
-                            disabled={updatingStatus[test.record_no]}
-                            className="px-3 py-2 text-sm border border-gray-800 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                            onClick={() => handleViewImages(test)}
+                            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            title="View Test Details"
                           >
-                            {updatingStatus[test.record_no] ? 'Updating...' : 'Mark Complete'}
+                            <Eye className="w-4 h-4 text-gray-600" />
                           </button>
-                        )}
-                        {isAdmin && (
-                          <span className="px-3 py-2 text-xs text-gray-500 italic">
-                            View Only
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {hasImage && (
+                            <a
+                              href={thumbnail.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                              title="View Full Image"
+                            >
+                              <ImageIcon className="w-4 h-4 text-gray-600" />
+                            </a>
+                          )}
+                          {!isAdmin && test.status?.toLowerCase() !== 'completed' && test.status?.toLowerCase() !== 'done' && (
+                            <button
+                              onClick={() => handleUpdateStatus(test.record_no, 'completed')}
+                              disabled={updatingStatus[test.record_no]}
+                              className="px-3 py-2 text-sm border border-gray-800 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                            >
+                              {updatingStatus[test.record_no] ? 'Updating...' : 'Mark Complete'}
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <span className="px-3 py-2 text-xs text-gray-500 italic">
+                              View Only
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -959,6 +1041,49 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [imageError, setImageError] = useState(false);
 
+  // Helper function to format alert messages
+  const formatAlertMessage = (title, data) => {
+    let message = `${title}\n\n`;
+    message += '='.repeat(50) + '\n\n';
+    
+    if (data.findings) {
+      message += '📝 FINDINGS:\n';
+      message += (data.findings || '(Not provided)') + '\n\n';
+      message += '-'.repeat(30) + '\n\n';
+    }
+    
+    if (data.impression) {
+      message += '💡 IMPRESSION:\n';
+      message += (data.impression || '(Not provided)') + '\n\n';
+      message += '-'.repeat(30) + '\n\n';
+    }
+    
+    if (data.file) {
+      message += '📁 FILE INFORMATION:\n';
+      if (data.file.name) {
+        message += `Name: ${data.file.name}\n`;
+        message += `Size: ${data.file.size || 'Unknown'}\n`;
+        message += `Type: ${data.file.type || 'Unknown'}\n`;
+      } else {
+        message += 'No new file uploaded\n';
+      }
+      message += '\n';
+      message += '-'.repeat(30) + '\n\n';
+    }
+    
+    if (data.path) {
+      message += '🗂️ FILE PATH:\n';
+      message += data.path + '\n\n';
+    }
+    
+    if (data.url) {
+      message += '🔗 FILE URL:\n';
+      message += data.url + '\n';
+    }
+    
+    return message;
+  };
+
   // Handle file selection for upload - disabled for admin
   const handleFileSelect = (event) => {
     if (isAdmin) {
@@ -1070,45 +1195,65 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
     }
   };
 
-  const handleSaveFindings = async () => {
-    if (isAdmin) {
-      alert('Administrators cannot save findings.');
-      return;
+const handleSaveFindings = async () => {
+  if (isAdmin) {
+    alert('Administrators cannot save findings.');
+    return;
+  }
+  
+  setSaving(true);
+  try {
+    const formData = new FormData();
+    formData.append('findings', findings);
+    formData.append('impression', impression);
+    
+    // Check if we have a new image to upload
+    if (selectedFile) {
+      // CHANGE THIS: Use 'image' instead of 'xrayImage'
+      formData.append('image', selectedFile);  // <-- Changed to 'image'
     }
     
-    setSaving(true);
-    try {
-      const response = await axios.put(
-        `${API_BASE_URL}/lab/xray/${test.record_no}/update`,
-        {
-          findings,
-          impression
+    console.log('Sending form data with fields:', {
+      findings,
+      impression,
+      hasFile: !!selectedFile,
+      fileName: selectedFile?.name
+    });
+    
+    const response = await axios.put(
+      `${API_BASE_URL}/lab/xray/${test.record_no}/update`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data'
         }
-      );
-
-      if (response.data.success) {
-        alert('Results saved successfully!');
-        
-        // Refresh the test list
-        if (onStatusUpdate) {
-          onStatusUpdate();
-        }
-        
-        // Close the modal
-        if (onClose) {
-          onClose();
-        }
-      } else {
-        throw new Error(response.data.message || 'Update failed');
       }
-    } catch (err) {
-      console.error('Error saving findings:', err);
-      alert(`Failed to save results: ${err.message}`);
-    } finally {
-      setSaving(false);
-    }
-  };
+    );
 
+    if (response.data.success) {
+      // ... rest of your success handling code
+    } else {
+      throw new Error(response.data.message || 'Update failed');
+    }
+  } catch (err) {
+    console.error('Error saving findings:', err);
+    
+    // Show detailed error alert
+    let errorMessage = `❌ Failed to save results:\n${err.message}`;
+    
+    if (err.response?.data?.error) {
+      errorMessage += `\n\nError Details:\n${err.response.data.error}`;
+    }
+    
+    if (err.response?.data?.message) {
+      errorMessage += `\n\nServer Message:\n${err.response.data.message}`;
+    }
+    
+    alert(errorMessage);
+  } finally {
+    setSaving(false);
+  }
+};
   // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -1327,13 +1472,77 @@ function ImageModal({ test, images = [], selectedImage, onImageSelect, onClose, 
                 />
               </div>
 
+              {/* Preview Section - Shows what will be sent */}
+              {!isAdmin && (
+                <div className="mb-6 border-t border-gray-200 pt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-gray-900">Preview of Data to be Sent</h3>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const preview = {
+                          findings: findings || '(Not provided)',
+                          impression: impression || '(Not provided)',
+                          file: selectedFile ? {
+                            name: selectedFile.name,
+                            size: `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`,
+                            type: selectedFile.type
+                          } : '(No new file)'
+                        };
+                        alert(`Preview of data to be sent:\n\n` +
+                              `Findings: ${preview.findings}\n\n` +
+                              `Impression: ${preview.impression}\n\n` +
+                              `File: ${preview.file === '(No new file)' ? 'No new file' : 
+                                `${preview.file.name} (${preview.file.size}, ${preview.file.type})`}`);
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Show Preview
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-2 text-xs text-gray-600">
+                    <div className="flex items-center">
+                      <div className="w-16 font-medium">Findings:</div>
+                      <div className="flex-1 truncate">{findings || <span className="text-gray-400">(Not provided)</span>}</div>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-16 font-medium">Impression:</div>
+                      <div className="flex-1 truncate">{impression || <span className="text-gray-400">(Not provided)</span>}</div>
+                    </div>
+                    <div className="flex items-center">
+                      <div className="w-16 font-medium">New File:</div>
+                      <div className="flex-1 truncate">
+                        {selectedFile ? (
+                          <span className="text-green-600">
+                            {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">(No new file selected)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {!isAdmin && (
                 <button
                   onClick={handleSaveFindings}
                   disabled={saving}
-                  className="w-full px-4 py-2 text-sm border border-gray-800 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  className="w-full px-4 py-2 text-sm border border-gray-800 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 flex items-center justify-center"
+                  title={selectedFile ? 
+                    `Save findings, impression, and upload: ${selectedFile.name}` : 
+                    'Save findings and impression (no new file)'}
                 >
-                  {saving ? 'Saving...' : 'Save & Complete Test'}
+                  {saving ? 'Saving...' : (
+                    <>
+                      <span>Save & Complete Test</span>
+                      {selectedFile && (
+                        <span className="ml-2 text-xs bg-blue-500 px-2 py-1 rounded">+ File</span>
+                      )}
+                    </>
+                  )}
                 </button>
               )}
             </div>

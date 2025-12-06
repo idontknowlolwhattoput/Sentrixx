@@ -9,6 +9,98 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper function to find available time slots for walk-in appointments
+const findAvailableTimeSlotForWalkIn = (employeeId, date) => {
+  return new Promise((resolve, reject) => {
+    // Get current time in 24-hour format for comparison
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTotalMinutes = currentHour * 60 + currentMinutes;
+    
+    // Convert current time to 12-hour format for time slot comparison
+    const getCurrentTimeSlot = () => {
+      let hours = currentHour;
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      // Round to nearest hour for time slot matching
+      return `${hours}:00 ${ampm}`;
+    };
+    
+    // Find all available time slots for today (with capacity > 0)
+    const query = `
+      SELECT timesheet_time, max_appointment 
+      FROM employee_timesheet 
+      WHERE employee_id = ? 
+        AND timesheet_date = "2025-12-06"
+        AND max_appointment > 0
+      ORDER BY timesheet_time
+    `;
+    
+    connection.query(query, [employeeId, date], (err, results) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      
+      if (results.length === 0) {
+        resolve(null); // No available slots
+        return;
+      }
+      
+      // Function to convert 12-hour time to total minutes for comparison
+      const time12hToMinutes = (time12h) => {
+        const match = time12h.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (!match) return Infinity;
+        
+        let [, hours, minutes, modifier] = match;
+        hours = parseInt(hours);
+        minutes = parseInt(minutes || 0);
+        
+        if (modifier.toUpperCase() === 'PM' && hours !== 12) {
+          hours += 12;
+        } else if (modifier.toUpperCase() === 'AM' && hours === 12) {
+          hours = 0;
+        }
+        
+        return hours * 60 + minutes;
+      };
+      
+      // Filter to only future time slots (not in the past)
+      const futureSlots = results.filter(slot => {
+        const slotMinutes = time12hToMinutes(slot.timesheet_time);
+        return slotMinutes >= currentTotalMinutes;
+      });
+      
+      if (futureSlots.length === 0) {
+        // No future slots available, but maybe there are slots later in the day
+        // Let's check if we're past all scheduled slots
+        const lastSlotMinutes = time12hToMinutes(results[results.length - 1].timesheet_time);
+        if (currentTotalMinutes > lastSlotMinutes) {
+          resolve(null); // All slots for today have passed
+          return;
+        }
+        
+        // If we're between slots, find the next available slot
+        for (const slot of results) {
+          const slotMinutes = time12hToMinutes(slot.timesheet_time);
+          if (slotMinutes > currentTotalMinutes) {
+            resolve(slot.timesheet_time);
+            return;
+          }
+        }
+        
+        resolve(null);
+        return;
+      }
+      
+      // Return the earliest available future slot
+      resolve(futureSlots[0].timesheet_time);
+    });
+  });
+};
+
 export const AddPatientVisit = async (req, res) => {
   try {
     const { 
@@ -23,10 +115,10 @@ export const AddPatientVisit = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!patient_id || !employee_id || !visit_status || !date_scheduled || !time_scheduled) {
+    if (!patient_id || !employee_id || !visit_status || !date_scheduled) {
       return res.status(400).json({ 
         success: false, 
-        message: "Missing required fields: patient_id, employee_id, visit_status, date_scheduled, time_scheduled" 
+        message: "Missing required fields: patient_id, employee_id, visit_status, date_scheduled" 
       });
     }
 
@@ -48,74 +140,143 @@ export const AddPatientVisit = async (req, res) => {
     // Clean the date - remove any time part if present
     const cleanDate = date_scheduled.split('T')[0];
 
-    // Check employee availability and max_appointment limit first
-    const checkAvailabilityQuery = `
-      SELECT max_appointment 
-      FROM employee_timesheet 
-      WHERE employee_id = ? 
-      AND timesheet_date = ? 
-      AND timesheet_time = ?
-    `;
+    // Generate professional appointment reference code
+    const generateAppointmentCode = () => {
+      const prefix = "APT";
+      const timestamp = Date.now().toString().slice(-6);
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      return `${prefix}-${timestamp}-${random}`;
+    };
 
-    connection.query(checkAvailabilityQuery, [employee_id, cleanDate, time_scheduled], (availabilityErr, availabilityResults) => {
-      if (availabilityErr) {
-        console.error("Error checking employee availability:", availabilityErr);
+    const appointmentCode = generateAppointmentCode();
+
+    // Generate QR code as buffer (not data URL)
+    const generateQRCodeBuffer = async (code) => {
+      try {
+        const qrBuffer = await QRCode.toBuffer(code, {
+          errorCorrectionLevel: 'H',
+          type: 'png',
+          quality: 0.9,
+          margin: 1,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF'
+          },
+          width: 200
+        });
+        return qrBuffer;
+      } catch (error) {
+        console.error("Error generating QR code:", error);
+        throw error;
+      }
+    };
+
+    // Handle different appointment types
+    if (visit_type === 'Walk-in') {
+      console.log(`Processing Walk-in appointment for patient ${patient_id}`);
+      
+      // For walk-ins, find the next available time slot
+      try {
+        const availableTimeSlot = await findAvailableTimeSlotForWalkIn(employee_id, cleanDate);
+        
+        if (!availableTimeSlot) {
+          return res.status(400).json({ 
+            success: false, 
+            message: "No available time slots for today. Please try again later or schedule for another day." 
+          });
+        }
+        
+        console.log(`Walk-in appointment assigned to time slot: ${availableTimeSlot}`);
+        
+        // Check capacity for the found time slot
+        const checkAvailabilityQuery = `
+          SELECT max_appointment 
+          FROM employee_timesheet 
+          WHERE employee_id = ? 
+          AND timesheet_date = ? 
+          AND timesheet_time = ?
+        `;
+
+        connection.query(checkAvailabilityQuery, [employee_id, cleanDate, availableTimeSlot], (availabilityErr, availabilityResults) => {
+          if (availabilityErr) {
+            console.error("Error checking employee availability:", availabilityErr);
+            return res.status(500).json({ 
+              success: false, 
+              message: "Error checking employee availability",
+              error: availabilityErr.message 
+            });
+          }
+
+          if (availabilityResults.length === 0 || availabilityResults[0].max_appointment <= 0) {
+            return res.status(400).json({ 
+              success: false, 
+              message: "Selected time slot is no longer available" 
+            });
+          }
+
+          // Proceed with walk-in appointment using the found time slot
+          createAppointment(availableTimeSlot);
+        });
+      } catch (error) {
+        console.error("Error finding available time slot:", error);
         return res.status(500).json({ 
           success: false, 
-          message: "Error checking employee availability",
-          error: availabilityErr.message 
+          message: "Error finding available time slot",
+          error: error.message 
         });
       }
-
-      // If no timesheet record exists or max_appointment is 0, employee is not available
-      if (availabilityResults.length === 0) {
+    } else {
+      // For Scheduled/Follow-up appointments, require time_scheduled
+      if (!time_scheduled) {
         return res.status(400).json({ 
           success: false, 
-          message: "Employee is not available at the scheduled time" 
+          message: "time_scheduled is required for Scheduled/Follow-up appointments" 
         });
       }
-
-      const currentMaxAppointment = availabilityResults[0].max_appointment;
       
-      if (currentMaxAppointment <= 0) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Employee has reached maximum appointments for this time slot" 
-        });
-      }
+      // Check availability for the specified time
+      const checkAvailabilityQuery = `
+        SELECT max_appointment 
+        FROM employee_timesheet 
+        WHERE employee_id = ? 
+        AND timesheet_date = ? 
+        AND timesheet_time = ?
+      `;
 
-      // Generate professional appointment reference code
-      const generateAppointmentCode = () => {
-        const prefix = "APT";
-        const timestamp = Date.now().toString().slice(-6);
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        return `${prefix}-${timestamp}-${random}`;
-      };
-
-      const appointmentCode = generateAppointmentCode();
-
-      // Generate QR code as buffer (not data URL)
-      const generateQRCodeBuffer = async (code) => {
-        try {
-          const qrBuffer = await QRCode.toBuffer(code, {
-            errorCorrectionLevel: 'H',
-            type: 'png',
-            quality: 0.9,
-            margin: 1,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF'
-            },
-            width: 200
+      connection.query(checkAvailabilityQuery, [employee_id, cleanDate, time_scheduled], (availabilityErr, availabilityResults) => {
+        if (availabilityErr) {
+          console.error("Error checking employee availability:", availabilityErr);
+          return res.status(500).json({ 
+            success: false, 
+            message: "Error checking employee availability",
+            error: availabilityErr.message 
           });
-          return qrBuffer;
-        } catch (error) {
-          console.error("Error generating QR code:", error);
-          throw error;
         }
-      };
 
+        // If no timesheet record exists or max_appointment is 0, employee is not available
+        if (availabilityResults.length === 0) {
+          return res.status(400).json({ 
+            success: false, 
+            message: "Employee is not available at the scheduled time" 
+          });
+        }
 
+        const currentMaxAppointment = availabilityResults[0].max_appointment;
+        
+        if (currentMaxAppointment <= 0) {
+          return res.status(400).json({ 
+            success: false, 
+            message: "Employee has reached maximum appointments for this time slot" 
+          });
+        }
+
+        // Proceed with scheduled appointment
+        createAppointment(time_scheduled);
+      });
+    }
+
+    // Common function to create appointment
+    function createAppointment(appointmentTime) {
       const query = `
         INSERT INTO patient_visit_record
           (patient_id, employee_id, date_scheduled, time_scheduled, visit_type, visit_purpose_title, visit_chief_complaint, appointment_code) 
@@ -126,7 +287,7 @@ export const AddPatientVisit = async (req, res) => {
         patient_id, 
         employee_id, 
         cleanDate,
-        time_scheduled,
+        appointmentTime,
         visit_type || null, 
         visit_purpose_title || null, 
         visit_chief_complaint || null,
@@ -153,7 +314,7 @@ export const AddPatientVisit = async (req, res) => {
           AND max_appointment > 0
         `;
 
-        connection.query(updateTimesheetQuery, [employee_id, cleanDate, time_scheduled], (updateErr, updateResult) => {
+        connection.query(updateTimesheetQuery, [employee_id, cleanDate, appointmentTime], (updateErr, updateResult) => {
           if (updateErr) {
             console.error("Error updating employee timesheet:", updateErr);
           }
@@ -165,55 +326,52 @@ export const AddPatientVisit = async (req, res) => {
           }
 
           // Continue with the rest of the process (email and response)
-          completeAppointmentProcess(result);
+          completeAppointmentProcess(result, appointmentTime);
+        });
+      });
+    }
+
+    async function completeAppointmentProcess(result, appointmentTime) {
+      try {
+        // Generate QR code buffer
+        const qrBuffer = await generateQRCodeBuffer(appointmentCode);
+        
+        // Convert buffer to base64 for email attachment
+        const qrBase64 = qrBuffer.toString('base64');
+        
+        // Format date for display
+        const appointmentDate = new Date(cleanDate);
+        const formattedDate = appointmentDate.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
         });
 
-        async function completeAppointmentProcess(result) {
-          try {
-            // Generate QR code buffer
-            const qrBuffer = await generateQRCodeBuffer(appointmentCode);
-            
-            // Convert buffer to base64 for email attachment
-            const qrBase64 = qrBuffer.toString('base64');
-            
-            // Format date for display
-            const appointmentDate = new Date(cleanDate);
-            const formattedDate = appointmentDate.toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            });
+        // Log the appointment code for debugging
+        console.log("Generated appointment code:", appointmentCode);
+        console.log("QR Code generated successfully, buffer size:", qrBuffer.length);
 
-            // Log the appointment code for debugging
-            console.log("Generated appointment code:", appointmentCode);
-            console.log("QR Code generated successfully, buffer size:", qrBuffer.length);
+        // Create a unique CID for the QR code image
+        const qrCid = `qr-${appointmentCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 
-            // Create a unique CID for the QR code image
-            const qrCid = `qr-${appointmentCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
-
-            // Send appointment confirmation email with attachment
-            try {
-              // First, let's check if your EmailTransporter supports attachments
-              // If not, we'll fall back to external URL
-              
-              // Option 1: Try with attachment if your transporter supports it
-              // This depends on your EmailTransporter implementation
-              
-              // Option 2: Fallback to external URL (most reliable for email)
-              const externalQRUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(appointmentCode)}&format=png&margin=1&color=000000&bgcolor=FFFFFF`;
-              
-              console.log("Using external QR URL for email:", externalQRUrl);
-              
-              await EmailTransporter(
-                "patient@example.com", // Replace with actual patient email
-                `Appointment Confirmation - ${appointmentCode}`,
-                `
+        // Send appointment confirmation email with attachment
+        try {
+          // Use external URL for better email compatibility
+          const externalQRUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(appointmentCode)}&format=png&margin=1&color=000000&bgcolor=FFFFFF`;
+          
+          console.log("Using external QR URL for email:", externalQRUrl);
+          
+          await EmailTransporter(
+            "patient@example.com", // Replace with actual patient email
+            `Appointment Confirmation - ${appointmentCode}`,
+            `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <style>
+        /* Same email styles as before */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: 'Helvetica Neue', Arial, sans-serif; 
@@ -443,7 +601,7 @@ export const AddPatientVisit = async (req, res) => {
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">TIME</span>
-                    <span class="detail-value">${time_scheduled}</span>
+                    <span class="detail-value">${appointmentTime}</span>
                 </div>
                 <div class="detail-item">
                     <span class="detail-label">TYPE</span>
@@ -456,6 +614,15 @@ export const AddPatientVisit = async (req, res) => {
                 </div>
                 ` : ''}
             </div>
+
+            <!-- Special note for walk-in appointments -->
+            ${visit_type === 'Walk-in' ? `
+            <div class="email-warning">
+                <span class="warning-icon">⚠</span> 
+                <strong>WALK-IN APPOINTMENT NOTICE:</strong> This is a walk-in appointment. 
+                Please arrive at your scheduled time. Walk-in appointments may experience longer wait times.
+            </div>
+            ` : ''}
 
             <div class="instructions">
                 <h3>PATIENT INSTRUCTIONS</h3>
@@ -488,51 +655,56 @@ export const AddPatientVisit = async (req, res) => {
     </div>
 </body>
 </html>
-                `,
-                [
-                  {
-                    filename: `appointment-qr-${appointmentCode}.png`,
-                    content: qrBase64,
-                    encoding: 'base64',
-                    cid: qrCid
-                  }
-                ]
-              );
-              console.log("Appointment confirmation email sent successfully");
-            } catch (emailErr) {
-              console.error("Email sending failed:", emailErr);
-              // Even if email fails, return success to user
-              console.log("Email failed but appointment created. Appointment code:", appointmentCode);
-            }
-
-            return res.status(201).json({
-              success: true,
-              message: "Patient visit scheduled successfully",
-              data: {
-                record_no: result.insertId,
-                appointment_code: appointmentCode,
-                patient_id: parseInt(patient_id),
-                employee_id: parseInt(employee_id),
-                date_scheduled: cleanDate,
-                time_scheduled: time_scheduled,
-                visit_type: visit_type,
-                visit_purpose_title: visit_purpose_title,
-                visit_chief_complaint: visit_chief_complaint,
-                date_created: new Date().toISOString()
+            `,
+            [
+              {
+                filename: `appointment-qr-${appointmentCode}.png`,
+                content: qrBase64,
+                encoding: 'base64',
+                cid: qrCid
               }
-            });
-
-          } catch (qrError) {
-            console.error("Error in appointment process:", qrError);
-            return res.status(500).json({ 
-              success: false, 
-              message: "Error generating appointment details",
-              error: qrError.message 
-            });
-          }
+            ]
+          );
+          console.log("Appointment confirmation email sent successfully");
+        } catch (emailErr) {
+          console.error("Email sending failed:", emailErr);
+          // Even if email fails, return success to user
+          console.log("Email failed but appointment created. Appointment code:", appointmentCode);
         }
-      });
-    });
+
+        return res.status(201).json({
+          success: true,
+          message: visit_type === 'Walk-in' 
+            ? `Walk-in appointment scheduled successfully for ${appointmentTime}` 
+            : "Appointment scheduled successfully",
+          data: {
+            record_no: result.insertId,
+            appointment_code: appointmentCode,
+            patient_id: parseInt(patient_id),
+            employee_id: parseInt(employee_id),
+            date_scheduled: cleanDate,
+            time_scheduled: appointmentTime,
+            visit_type: visit_type,
+            visit_purpose_title: visit_purpose_title,
+            visit_chief_complaint: visit_chief_complaint,
+            date_created: new Date().toISOString()
+          },
+          walk_in_note: visit_type === 'Walk-in' ? {
+            message: "This is a walk-in appointment. Please arrive on time.",
+            assigned_time: appointmentTime,
+            original_request_time: time_scheduled || "Not specified"
+          } : null
+        });
+
+      } catch (qrError) {
+        console.error("Error in appointment process:", qrError);
+        return res.status(500).json({ 
+          success: false, 
+          message: "Error generating appointment details",
+          error: qrError.message 
+        });
+      }
+    }
     
   } catch (error) {
     console.error("Server error:", error);

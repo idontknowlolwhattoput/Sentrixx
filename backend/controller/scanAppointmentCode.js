@@ -32,6 +32,34 @@ export const getAppointmentByCodeController = (req, res) => {
     WHERE pvr.appointment_code = ?
   `;
 
+  // Function to format date to YYYY-MM-DD (handle both string and Date object)
+  const formatDateToYYYYMMDD = (dateValue) => {
+    // If it's already a string
+    if (typeof dateValue === 'string') {
+      // If it's DATETIME like "2025-12-06 00:00:00", extract date part
+      if (dateValue.includes(' ')) {
+        return dateValue.split(' ')[0];
+      }
+      // If it's already DATE like "2025-12-06", return as is
+      return dateValue;
+    }
+    
+    // If it's a Date object (from MySQL)
+    if (dateValue instanceof Date) {
+      const year = dateValue.getFullYear();
+      const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+      const day = String(dateValue.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    // If it's something else, convert to string first
+    const dateStr = String(dateValue);
+    if (dateStr.includes(' ')) {
+      return dateStr.split(' ')[0];
+    }
+    return dateStr;
+  };
+
   // Function to get current hour in 12-hour format (e.g., "10:00 AM", "02:00 PM")
   const getCurrentHourFormatted = () => {
     const now = new Date();
@@ -45,37 +73,13 @@ export const getAppointmentByCodeController = (req, res) => {
     return `${hours}:00 ${ampm}`;
   };
 
-  // Function to get NEXT hour in 12-hour format from a given time
-  const getNextHourFormatted = (time12h) => {
-    // Parse the time (assumes format like "10:00 AM")
-    const match = time12h.match(/(\d+):00\s*(AM|PM)/i);
-    if (!match) {
-      throw new Error(`Invalid time format: ${time12h}`);
-    }
-    
-    let [, hours, modifier] = match;
-    hours = parseInt(hours);
-    
-    // Calculate next hour
-    let nextHour = hours + 1;
-    let nextModifier = modifier;
-    
-    // Handle AM/PM transitions
-    if (nextHour === 12) {
-      // 11 AM → 12 PM, 11 PM → 12 AM
-      nextModifier = modifier === 'AM' ? 'PM' : 'AM';
-    } else if (nextHour > 12) {
-      nextHour = 1;
-      nextModifier = modifier === 'AM' ? 'PM' : 'AM';
-    }
-    
-    return `${nextHour}:00 ${nextModifier}`;
-  };
-
   // Function to parse 12-hour time and create proper datetime
-  const createAppointmentDateTime = (dateString, time12h) => {
-    // Parse the date (handles ISO format with timezone)
-    const date = new Date(dateString);
+  const createAppointmentDateTime = (dateValue, time12h) => {
+    // First extract date part
+    const dateOnly = formatDateToYYYYMMDD(dateValue);
+    
+    // Parse the date
+    const date = new Date(dateOnly);
     
     // Parse 12-hour time format (e.g., "10:00 AM", "2:00 PM")
     const match = time12h.match(/(\d+):(\d+)\s*(AM|PM)/i);
@@ -112,64 +116,132 @@ export const getAppointmentByCodeController = (req, res) => {
     return appointmentDateOnly.getTime() === currentDateOnly.getTime();
   };
 
-  // Function to determine new appointment time based on lateness
-  const determineNewAppointmentTime = (scheduledTime, currentTime) => {
-    // Parse scheduled time (assumes format like "10:00 AM")
-    const match = scheduledTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  // Function to convert 12-hour time to 24-hour for comparison
+  const time12hTo24h = (time12h) => {
+    if (!time12h) return null;
+    
+    const match = time12h.match(/(\d+):(\d+)\s*(AM|PM)/i);
     if (!match) {
-      throw new Error(`Invalid time format: ${scheduledTime}`);
+      console.warn(`Invalid time format for conversion: ${time12h}`);
+      return null;
     }
     
     let [, hours, minutes, modifier] = match;
     hours = parseInt(hours);
-    minutes = parseInt(minutes);
+    minutes = parseInt(minutes || 0);
     
-    // Convert scheduled time to 24-hour format for comparison
-    let scheduledHour24 = hours;
     if (modifier.toUpperCase() === 'PM' && hours !== 12) {
-      scheduledHour24 = hours + 12;
+      hours += 12;
     } else if (modifier.toUpperCase() === 'AM' && hours === 12) {
-      scheduledHour24 = 0;
+      hours = 0;
     }
     
-    // Get current time in 24-hour format
-    const currentHour24 = currentTime.getHours();
-    const currentMinutes = currentTime.getMinutes();
-    
-    // Calculate total minutes difference
-    const totalScheduledMinutes = scheduledHour24 * 60 + minutes;
-    const totalCurrentMinutes = currentHour24 * 60 + currentMinutes;
-    const minutesDifference = totalCurrentMinutes - totalScheduledMinutes;
-    
-    // Determine new appointment time
-    if (minutesDifference <= 30) {
-      // ≤ 30 minutes late: keep original time
-      return {
-        newTime: scheduledTime,
-        reason: "on_time",
-        minutesLate: minutesDifference
-      };
-    } else if (minutesDifference <= 90) {
-      // 31-90 minutes late: reschedule to next hour
-      const nextHourTime = getNextHourFormatted(scheduledTime);
-      return {
-        newTime: nextHourTime,
-        reason: "late_30_to_90_minutes",
-        minutesLate: minutesDifference
-      };
-    } else {
-      // > 90 minutes late: reschedule to current hour
-      const currentHourTime = getCurrentHourFormatted();
-      return {
-        newTime: currentHourTime,
-        reason: "late_over_90_minutes",
-        minutesLate: minutesDifference
-      };
-    }
+    return hours * 60 + minutes; // Return total minutes for easy comparison
   };
 
-  // First get the appointment details to check the schedule
-  connection.query(selectQuery, [appointmentCode], (selectErr, results) => {
+  // Function to get doctor's available time slots for today
+  const getDoctorAvailableSlots = (employeeId, dateValue, currentTime24h) => {
+    return new Promise((resolve, reject) => {
+      // Extract date part from whatever format it is
+      const dateOnly = formatDateToYYYYMMDD(dateValue);
+      
+      console.log(`Checking availability for doctor ${employeeId} on ${dateOnly}, currentTime24h: ${currentTime24h}`);
+      
+      const query = `
+        SELECT timesheet_time, max_appointment 
+        FROM employee_timesheet 
+        WHERE employee_id = ? 
+          AND timesheet_date = ? 
+          AND max_appointment > 0
+        ORDER BY timesheet_time
+      `;
+      
+      connection.query(query, [employeeId, dateOnly], (err, results) => {
+        if (err) {
+          console.error("Database error in getDoctorAvailableSlots:", err);
+          reject(err);
+          return;
+        }
+        
+        console.log(`Found ${results.length} slots with capacity for doctor ${employeeId}:`, results);
+        
+        // Filter out past time slots (only future slots from current time)
+        const availableSlots = results.filter(slot => {
+          const slotTime24h = time12hTo24h(slot.timesheet_time);
+          const isValid = slotTime24h !== null && slotTime24h >= currentTime24h;
+          if (!isValid) {
+            console.log(`Filtered out slot ${slot.timesheet_time} (slotTime24h: ${slotTime24h}, currentTime24h: ${currentTime24h})`);
+          }
+          return isValid;
+        });
+        
+        console.log(`After filtering, ${availableSlots.length} future slots available`);
+        resolve(availableSlots);
+      });
+    });
+  };
+
+  // Function to find the best available time slot
+  const findBestAvailableSlot = (originalTime, availableSlots, currentTime24h, minutesLate) => {
+    if (availableSlots.length === 0) {
+      console.log("No available slots to choose from");
+      return null; // No slots available
+    }
+    
+    const originalTime24h = time12hTo24h(originalTime);
+    console.log(`Finding best slot. Original time: ${originalTime} (${originalTime24h} minutes), Minutes late: ${minutesLate}`);
+    
+    // Strategy based on how late they are
+    if (minutesLate <= 30) {
+      // Try to keep original time slot if still available
+      const originalSlot = availableSlots.find(slot => {
+        const slotTime24h = time12hTo24h(slot.timesheet_time);
+        return slotTime24h === originalTime24h;
+      });
+      
+      if (originalSlot) {
+        console.log(`Patient on time or slightly late. Keeping original slot: ${originalSlot.timesheet_time}`);
+        return {
+          timesheet_time: originalSlot.timesheet_time,
+          reason: "on_time",
+          is_original_slot: true
+        };
+      }
+    }
+    
+    // Find closest available slot to original time
+    let bestSlot = null;
+    let minTimeDifference = Infinity;
+    
+    for (const slot of availableSlots) {
+      const slotTime24h = time12hTo24h(slot.timesheet_time);
+      const timeDifference = Math.abs(slotTime24h - originalTime24h);
+      
+      console.log(`Evaluating slot ${slot.timesheet_time} (${slotTime24h} min): difference ${timeDifference} min`);
+      
+      // Prefer slots that are closest to original time
+      if (timeDifference < minTimeDifference) {
+        minTimeDifference = timeDifference;
+        bestSlot = slot;
+      }
+    }
+    
+    if (bestSlot) {
+      console.log(`Selected best slot: ${bestSlot.timesheet_time} (difference: ${minTimeDifference} minutes)`);
+      return {
+        timesheet_time: bestSlot.timesheet_time,
+        reason: minutesLate <= 90 ? "late_30_to_90_minutes" : "late_over_90_minutes",
+        is_original_slot: false,
+        time_difference: minTimeDifference
+      };
+    }
+    
+    console.log("No suitable slot found");
+    return null;
+  };
+
+  // Main logic
+  connection.query(selectQuery, [appointmentCode], async (selectErr, results) => {
     if (selectErr) {
       console.error("Query error:", selectErr.message);
       return res.status(500).json({
@@ -187,7 +259,19 @@ export const getAppointmentByCodeController = (req, res) => {
     const appointment = results[0];
     const now = new Date();
 
+    console.log(`Appointment found:`, {
+      date_scheduled: appointment.date_scheduled,
+      date_scheduled_type: typeof appointment.date_scheduled,
+      date_scheduled_constructor: appointment.date_scheduled?.constructor?.name,
+      time_scheduled: appointment.time_scheduled,
+      employee_id: appointment.employee_id
+    });
+
     try {
+      // Format the appointment date for display and queries
+      const formattedAppointmentDate = formatDateToYYYYMMDD(appointment.date_scheduled);
+      console.log(`Formatted appointment date: ${formattedAppointmentDate}`);
+
       // Create proper datetime object from date_scheduled and time_scheduled
       const appointmentDateTime = createAppointmentDateTime(
         appointment.date_scheduled, 
@@ -205,12 +289,20 @@ export const getAppointmentByCodeController = (req, res) => {
       const isPastDate = appointmentDateOnly < todayDateOnly;
       const isFutureDate = appointmentDateOnly > todayDateOnly;
 
+      console.log(`Date check:`, {
+        appointmentDate: appointmentDateOnly.toISOString(),
+        todayDate: todayDateOnly.toISOString(),
+        isToday,
+        isPastDate,
+        isFutureDate
+      });
+
       // Date-based validation
       if (isPastDate) {
         return res.status(400).json({
           message: "Appointment date has already passed",
           details: {
-            scheduledDate: appointment.date_scheduled,
+            scheduledDate: formattedAppointmentDate,
             scheduledTime: appointment.time_scheduled,
             currentDate: now.toISOString().split('T')[0],
             reason: "appointment_passed"
@@ -222,7 +314,7 @@ export const getAppointmentByCodeController = (req, res) => {
         return res.status(400).json({
           message: "Appointment is scheduled for a future date",
           details: {
-            scheduledDate: appointment.date_scheduled,
+            scheduledDate: formattedAppointmentDate,
             scheduledTime: appointment.time_scheduled,
             currentDate: now.toISOString().split('T')[0],
             reason: "future_appointment"
@@ -230,96 +322,237 @@ export const getAppointmentByCodeController = (req, res) => {
         });
       }
 
-      // If we reach here, it's today's date
-      // Determine if we need to reschedule based on lateness
-      const rescheduleInfo = determineNewAppointmentTime(appointment.time_scheduled, now);
-      const { newTime, reason, minutesLate } = rescheduleInfo;
+      // If we reach here, it's today's appointment
+      // Calculate how late they are
+      const appointmentTime24h = time12hTo24h(appointment.time_scheduled);
+      const currentTime24h = now.getHours() * 60 + now.getMinutes();
+      const minutesLate = currentTime24h - appointmentTime24h;
       
-      let message = "Appointment found and status updated to Queued";
-      let timeUpdated = false;
-
-      if (newTime !== appointment.time_scheduled) {
-        timeUpdated = true;
-        
-        if (reason === "late_30_to_90_minutes") {
-          message = `Appointment rescheduled to ${newTime} (30+ minutes late from ${appointment.time_scheduled})`;
-        } else if (reason === "late_over_90_minutes") {
-          message = `Appointment rescheduled to ${newTime} (significantly late from ${appointment.time_scheduled})`;
-        }
-        
-        // Update with new time - ONLY update time_scheduled and visit_status
-        const updateQuery = `
-          UPDATE patient_visit_record 
-          SET time_scheduled = ?, 
-              visit_status = "Queued"
-          WHERE appointment_code = ?
-        `;
-
-        connection.query(updateQuery, [newTime, appointmentCode], (updateErr, updateResults) => {
-          if (updateErr) {
-            console.error("Update error:", updateErr.message);
-            return res.status(500).json({
-              message: "Database update error",
-              error: updateErr.message,
-            });
+      console.log(`Timing check:`, {
+        appointmentTime12h: appointment.time_scheduled,
+        appointmentTime24h,
+        currentTime24h,
+        minutesLate,
+        currentTime: now.toLocaleTimeString()
+      });
+      
+      // Check if they're too early (more than 1 hour early)
+      if (minutesLate < -60) {
+        return res.status(400).json({
+          message: "You are too early. Please arrive closer to your appointment time.",
+          details: {
+            scheduledTime: appointment.time_scheduled,
+            currentTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            minutesEarly: Math.abs(minutesLate),
+            reason: "too_early"
           }
-
-          // Return the appointment record with updated time
-          return res.status(200).json({
-            message: message,
-            appointment: {
-              ...appointment,
-              time_scheduled: newTime,
-              // Store original time in response, not in database
-              original_time_scheduled: appointment.time_scheduled
-            },
-            timing: {
-              isToday: isToday,
-              timeUpdated: timeUpdated,
-              reason: reason,
-              minutesLate: Math.round(minutesLate),
-              currentTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-              newAppointmentTime: newTime,
-              originalAppointmentTime: appointment.time_scheduled,
-              currentDate: now.toISOString().split('T')[0],
-              appointmentDate: appointment.date_scheduled
-            }
-          });
-        });
-      } else {
-        // No time change needed, just update status
-        const updateQuery = `
-          UPDATE patient_visit_record 
-          SET visit_status = "Queued" 
-          WHERE appointment_code = ?
-        `;
-
-        connection.query(updateQuery, [appointmentCode], (updateErr, updateResults) => {
-          if (updateErr) {
-            console.error("Update error:", updateErr.message);
-            return res.status(500).json({
-              message: "Database update error",
-              error: updateErr.message,
-            });
-          }
-
-          // Return the appointment record
-          return res.status(200).json({
-            message: message,
-            appointment: appointment,
-            timing: {
-              isToday: isToday,
-              timeUpdated: timeUpdated,
-              reason: reason,
-              minutesLate: Math.round(minutesLate),
-              currentTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-              appointmentTime: appointment.time_scheduled,
-              currentDate: now.toISOString().split('T')[0],
-              appointmentDate: appointment.date_scheduled
-            }
-          });
         });
       }
+
+      // Determine if we need to reschedule based on lateness AND availability
+      let newTime = appointment.time_scheduled;
+      let timeUpdated = false;
+      let reason = "on_time";
+      let doctorAvailability = null;
+
+      // If they're more than 30 minutes late, check for available slots
+      if (minutesLate > 30) {
+        console.log(`Patient is ${minutesLate} minutes late. Checking for available slots...`);
+        
+        try {
+          // Get doctor's available time slots for today
+          const availableSlots = await getDoctorAvailableSlots(
+            appointment.employee_id,
+            appointment.date_scheduled,
+            currentTime24h
+          );
+          
+          console.log(`Available slots:`, availableSlots);
+          
+          // Find the best available slot
+          const bestSlot = findBestAvailableSlot(
+            appointment.time_scheduled,
+            availableSlots,
+            currentTime24h,
+            minutesLate
+          );
+          
+          if (bestSlot) {
+            newTime = bestSlot.timesheet_time;
+            timeUpdated = newTime !== appointment.time_scheduled;
+            reason = bestSlot.reason;
+            doctorAvailability = {
+              available_slots: availableSlots.map(s => ({
+                time: s.timesheet_time,
+                capacity: s.max_appointment
+              })),
+              selected_slot: bestSlot.timesheet_time,
+              was_original_available: bestSlot.is_original_slot
+            };
+            
+            console.log(`Rescheduling decision:`, {
+              originalTime: appointment.time_scheduled,
+              newTime,
+              timeUpdated,
+              reason
+            });
+            
+            if (timeUpdated) {
+              // Use the formatted date for queries
+              const appointmentDate = formattedAppointmentDate;
+              
+              console.log(`Updating timesheet capacity:`, {
+                doctorId: appointment.employee_id,
+                date: appointmentDate,
+                oldTime: appointment.time_scheduled,
+                newTime
+              });
+              
+              // We need to update the timesheet capacity for both old and new slots
+              // 1. Add back capacity to old time slot
+              const addBackQuery = `
+                UPDATE employee_timesheet 
+                SET max_appointment = max_appointment + 1 
+                WHERE employee_id = ? 
+                  AND timesheet_date = ? 
+                  AND timesheet_time = ?
+              `;
+              
+              await new Promise((resolve, reject) => {
+                connection.query(addBackQuery, 
+                  [appointment.employee_id, appointmentDate, appointment.time_scheduled],
+                  (err, result) => {
+                    if (err) {
+                      console.error("Error adding back capacity:", err);
+                      reject(err);
+                    } else {
+                      console.log(`Added back capacity to old slot: ${appointment.time_scheduled}, affected rows: ${result.affectedRows}`);
+                      resolve();
+                    }
+                  }
+                );
+              });
+              
+              // 2. Deduct capacity from new time slot
+              const deductQuery = `
+                UPDATE employee_timesheet 
+                SET max_appointment = max_appointment - 1 
+                WHERE employee_id = ? 
+                  AND timesheet_date = ? 
+                  AND timesheet_time = ?
+                  AND max_appointment > 0
+              `;
+              
+              await new Promise((resolve, reject) => {
+                connection.query(deductQuery, 
+                  [appointment.employee_id, appointmentDate, newTime],
+                  (err, result) => {
+                    if (err) {
+                      console.error("Error deducting capacity:", err);
+                      reject(err);
+                    } else {
+                      if (result.affectedRows === 0) {
+                        console.error(`No capacity available in selected time slot: ${newTime}`);
+                        reject(new Error("No capacity available in selected time slot"));
+                      } else {
+                        console.log(`Deducted capacity from new slot: ${newTime}, affected rows: ${result.affectedRows}`);
+                        resolve();
+                      }
+                    }
+                  }
+                );
+              });
+            }
+          } else {
+            // No available slots for today
+            console.log(`No available slots found for doctor ${appointment.employee_id} on ${formattedAppointmentDate}`);
+            return res.status(400).json({
+              message: "No available time slots for today. Please reschedule for another day.",
+              details: {
+                doctorId: appointment.employee_id,
+                doctorName: `${appointment.doctor_first_name} ${appointment.doctor_last_name}`,
+                date: formattedAppointmentDate,
+                reason: "no_available_slots"
+              }
+            });
+          }
+        } catch (error) {
+          console.error("Error checking availability:", error.message);
+          return res.status(500).json({
+            message: "Error checking doctor availability",
+            error: error.message
+          });
+        }
+      } else {
+        console.log(`Patient is on time or slightly late (${minutesLate} minutes). No rescheduling needed.`);
+      }
+
+      // Update appointment with new time (if changed) and status
+      const updateQuery = timeUpdated ? `
+        UPDATE patient_visit_record 
+        SET time_scheduled = ?, 
+            visit_status = "Queued"
+        WHERE appointment_code = ?
+      ` : `
+        UPDATE patient_visit_record 
+        SET visit_status = "Queued" 
+        WHERE appointment_code = ?
+      `;
+      
+      const updateValues = timeUpdated ? [newTime, appointmentCode] : [appointmentCode];
+
+      console.log(`Updating appointment:`, {
+        query: updateQuery,
+        values: updateValues,
+        timeUpdated
+      });
+
+      connection.query(updateQuery, updateValues, (updateErr, updateResults) => {
+        if (updateErr) {
+          console.error("Update error:", updateErr.message);
+          return res.status(500).json({
+            message: "Database update error",
+            error: updateErr.message,
+          });
+        }
+
+        console.log(`Appointment updated successfully. Affected rows: ${updateResults.affectedRows}`);
+
+        // Return the appointment record
+        const response = {
+          message: timeUpdated 
+            ? `Appointment rescheduled to ${newTime}` 
+            : "Appointment found and status updated to Queued",
+          appointment: {
+            ...appointment,
+            time_scheduled: newTime,
+            visit_status: "Queued"
+          },
+          timing: {
+            isToday: isToday,
+            timeUpdated: timeUpdated,
+            reason: reason,
+            minutesLate: Math.max(0, Math.round(minutesLate)),
+            currentTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            appointmentTime: newTime,
+            originalAppointmentTime: timeUpdated ? appointment.time_scheduled : null,
+            currentDate: now.toISOString().split('T')[0],
+            appointmentDate: formattedAppointmentDate
+          }
+        };
+
+        // Add doctor availability info if we checked it
+        if (doctorAvailability) {
+          response.doctorAvailability = doctorAvailability;
+        }
+
+        console.log(`Returning response:`, {
+          message: response.message,
+          timeUpdated: response.timing.timeUpdated
+        });
+
+        return res.status(200).json(response);
+      });
 
     } catch (error) {
       console.error("Time parsing error:", error.message);

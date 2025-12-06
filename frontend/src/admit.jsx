@@ -8,8 +8,33 @@ const HospitalAdmittanceSystem = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [admissionSuccess, setAdmissionSuccess] = useState(false);
 
-  // Simple data structure for wards
-  const [wards, setWards] = useState([
+  // Key for localStorage
+  const STORAGE_KEY = 'hospital_bed_data';
+
+  // Function to save wards data to localStorage
+  const saveWardsToStorage = (wardsData) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(wardsData));
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
+  };
+
+  // Function to load wards data from localStorage
+  const loadWardsFromStorage = () => {
+    try {
+      const savedData = localStorage.getItem(STORAGE_KEY);
+      if (savedData) {
+        return JSON.parse(savedData);
+      }
+    } catch (error) {
+      console.error('Error loading from localStorage:', error);
+    }
+    return null;
+  };
+
+  // Initial wards data
+  const initialWards = [
     {
       id: 'emergency',
       name: 'Emergency Room',
@@ -45,12 +70,23 @@ const HospitalAdmittanceSystem = () => {
         { id: 11, patient: null, status: 'available', patientRecord: null },
       ]
     },
-  ]);
+  ];
+
+  // Load wards from localStorage on component mount
+  const [wards, setWards] = useState(() => {
+    const savedWards = loadWardsFromStorage();
+    return savedWards || initialWards;
+  });
+
+  // Save wards to localStorage whenever they change
+  useEffect(() => {
+    saveWardsToStorage(wards);
+  }, [wards]);
 
   // Available patients waiting for beds
   const [availablePatients, setAvailablePatients] = useState([]);
   
-  // Form state for patient assignment - reduced to only used fields
+  // Form state for patient assignment
   const [assignmentForm, setAssignmentForm] = useState({
     patient_id: null,
     admission_type: '',
@@ -84,57 +120,6 @@ const HospitalAdmittanceSystem = () => {
 
   // API Base URL
   const API_BASE_URL = 'http://localhost:5000';
-
-  // Fetch patients from API
-  useEffect(() => {
-    const fetchPatients = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(`${API_BASE_URL}/patient/patients`);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.patients) {
-          setApiPatients(data.patients);
-          
-          // Convert API patients to available patients format
-          const formattedPatients = data.patients.map(patient => ({
-            id: patient.patient_id,
-            name: `${patient.first_name} ${patient.last_name}`,
-            fullName: `${patient.first_name} ${patient.middle_name ? patient.middle_name + ' ' : ''}${patient.last_name}`,
-            firstName: patient.first_name,
-            middleName: patient.middle_name,
-            lastName: patient.last_name,
-            dateOfBirth: patient.date_of_birth,
-            gender: patient.gender,
-            mobileNumber: patient.mobile_number,
-            email: patient.email,
-            age: calculateAge(patient.date_of_birth),
-            createdAt: patient.created_at
-          }));
-          
-          setAvailablePatients(formattedPatients);
-        } else {
-          throw new Error('Invalid API response format');
-        }
-      } catch (error) {
-        console.error('Error fetching patients:', error);
-        setError(error.message);
-        
-        // Fallback to sample data if API fails
-        const fallbackPatients = generateFallbackPatients();
-        setAvailablePatients(fallbackPatients);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchPatients();
-  }, []);
 
   // Helper function to generate fallback patients
   const generateFallbackPatients = () => {
@@ -180,6 +165,84 @@ const HospitalAdmittanceSystem = () => {
     }
     return age;
   };
+
+  // Fetch patients from API
+  const fetchPatients = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE_URL}/patient/patients`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.patients) {
+        setApiPatients(data.patients);
+        
+        // Get all occupied patient IDs from wards
+        const occupiedPatientIds = new Set();
+        wards.forEach(ward => {
+          ward.beds.forEach(bed => {
+            if (bed.patient && bed.patient.id) {
+              occupiedPatientIds.add(bed.patient.id);
+            }
+          });
+        });
+        
+        // Convert API patients to available patients format
+        const formattedPatients = data.patients
+          .filter(patient => !occupiedPatientIds.has(patient.patient_id)) // Only show unoccupied patients
+          .map(patient => ({
+            id: patient.patient_id,
+            name: `${patient.first_name} ${patient.last_name}`,
+            fullName: `${patient.first_name} ${patient.middle_name ? patient.middle_name + ' ' : ''}${patient.last_name}`,
+            firstName: patient.first_name,
+            middleName: patient.middle_name,
+            lastName: patient.last_name,
+            dateOfBirth: patient.date_of_birth,
+            gender: patient.gender,
+            mobileNumber: patient.mobile_number,
+            email: patient.email,
+            age: calculateAge(patient.date_of_birth),
+            createdAt: patient.created_at
+          }));
+        
+        setAvailablePatients(formattedPatients);
+      } else {
+        throw new Error('Invalid API response format');
+      }
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+      setError(error.message);
+      
+      // Fallback to sample data if API fails
+      const fallbackPatients = generateFallbackPatients();
+      
+      // Filter out already occupied patients from fallback
+      const occupiedPatientIds = new Set();
+      wards.forEach(ward => {
+        ward.beds.forEach(bed => {
+          if (bed.patient && bed.patient.id) {
+            occupiedPatientIds.add(bed.patient.id);
+          }
+        });
+      });
+      
+      const availableFallbackPatients = fallbackPatients.filter(
+        patient => !occupiedPatientIds.has(patient.id)
+      );
+      
+      setAvailablePatients(availableFallbackPatients);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPatients();
+  }, [wards]);
 
   // Handle bed click
   const handleBedClick = (bed) => {
@@ -275,7 +338,7 @@ const HospitalAdmittanceSystem = () => {
           status: 'Admitted'
         };
 
-        // Update the wards
+        // Update the wards (this will automatically save to localStorage via useEffect)
         const updatedWards = wards.map(ward => {
           if (ward.id === selectedWard) {
             const updatedBeds = ward.beds.map(b => {
@@ -366,7 +429,7 @@ const HospitalAdmittanceSystem = () => {
     
     setAvailablePatients([...availablePatients, patientToAdd]);
 
-
+    // Update wards (this will automatically save to localStorage via useEffect)
     const updatedWards = wards.map(ward => {
       if (ward.id === selectedWard) {
         const updatedBeds = ward.beds.map(b => {
@@ -382,6 +445,16 @@ const HospitalAdmittanceSystem = () => {
 
     setWards(updatedWards);
     setSelectedBed(null);
+  };
+
+  // Reset all data (for testing/debugging)
+  const resetAllData = () => {
+    if (window.confirm('Are you sure you want to reset all bed assignments? This cannot be undone.')) {
+      localStorage.removeItem(STORAGE_KEY);
+      setWards(initialWards);
+      // Refresh available patients
+      fetchPatients();
+    }
   };
 
   // Get status color
@@ -418,6 +491,14 @@ const HospitalAdmittanceSystem = () => {
             </div>
           )}
         </div>
+
+        {/* Reset Button (for testing) */}
+        <button
+          onClick={resetAllData}
+          className="mb-4 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm"
+        >
+          Reset All Beds
+        </button>
 
         {/* Main Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

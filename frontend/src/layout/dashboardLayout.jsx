@@ -23,6 +23,8 @@ import QRScanner from "../QrScanner"
 import DoctorAnalyticsDashboard from "../components/Employee/DoctorAnalyticsQueue"
 import LabTechnicianDashboard from "../components/Laboratory/labTechnicianDashboard"
 import HospitalAdmittanceSystem from "../admit"
+import QueueTVScreen from "../components/Employee/QueueTVScreen"
+import AnalyticsDashboard from "../components/Admin/analytics"
 
 export default function DashboardLayout() {
     const [isDropdown, setDropDown] = useState(false)
@@ -89,8 +91,10 @@ export default function DashboardLayout() {
                 return <LabTechnicianDashboard />
             case "Admit":
                 return <HospitalAdmittanceSystem/>
-            default:
-                return <DashboardHome />
+            case "Queue":
+                return <QueueTVScreen/>
+            case "Analytics":
+                navigate("/analytics")
         }
     }
 
